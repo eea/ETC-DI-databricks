@@ -1,0 +1,2015 @@
+-- Databricks notebook source
+-- MAGIC %md # Wildfires 2023 
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %md ### 1 Load Data
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %python
+-- MAGIC import pyspark
+-- MAGIC from delta import *
+-- MAGIC # Required for StructField, StringType, IntegerType, etc.
+-- MAGIC from pyspark.sql.types import *
+
+-- COMMAND ----------
+
+-- MAGIC %md #### Administrative Units - NUTS3
+
+-- COMMAND ----------
+
+-- MAGIC %scala
+-- MAGIC //// (0) ADMIN layer  Nuts2021 ################################################################################
+-- MAGIC // Reading the admin DIM:---------------------------------------------
+-- MAGIC //https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=1517&fileId=542
+-- MAGIC val parquetFileDF_D_ADMbndEEA39v2021 = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_ADMbndEEA39v2021_542_2022613_100m/")             /// use load
+-- MAGIC parquetFileDF_D_ADMbndEEA39v2021.createOrReplaceTempView("D_admbndEEA39v2021")
+-- MAGIC
+-- MAGIC ///// Reading the LUT :---------------------------------------------
+-- MAGIC ///https://jedi.discomap.eea.europa.eu/LookUp/show?lookUpId=65
+-- MAGIC
+-- MAGIC import org.apache.spark.sql.types._
+-- MAGIC val schema_nuts2021 = new StructType()
+-- MAGIC .add("ADM_ID",LongType,true)
+-- MAGIC .add("ISO2",StringType,true)
+-- MAGIC .add("ESTAT",StringType,true)
+-- MAGIC .add("ADM_COUNTRY",StringType,true)
+-- MAGIC
+-- MAGIC .add("LEVEL3_name",StringType,true)
+-- MAGIC .add("LEVEL2_name",StringType,true)
+-- MAGIC .add("LEVEL1_name",StringType,true)
+-- MAGIC .add("LEVEL0_name",StringType,true)
+-- MAGIC .add("LEVEL3_code",StringType,true)
+-- MAGIC .add("LEVEL2_code",StringType,true)
+-- MAGIC .add("LEVEL1_code",StringType,true)
+-- MAGIC .add("LEVEL0_code",StringType,true)
+-- MAGIC
+-- MAGIC .add("EEA32_2020",IntegerType,true)
+-- MAGIC .add("EEA38_2020",IntegerType,true)
+-- MAGIC .add("EEA39",IntegerType,true)
+-- MAGIC .add("EEA33",IntegerType,true)
+-- MAGIC .add("EEA32_2006",IntegerType,true)
+-- MAGIC .add("EU27_2020",IntegerType,true)
+-- MAGIC .add("EU28",IntegerType,true)
+-- MAGIC .add("EU27_2007",IntegerType,true)
+-- MAGIC .add("EU25",IntegerType,true)
+-- MAGIC .add("EU15",IntegerType,true)
+-- MAGIC .add("EU12",IntegerType,true)
+-- MAGIC .add("EU10",IntegerType,true)
+-- MAGIC .add("EFTA4",IntegerType,true)
+-- MAGIC .add("NUTS_EU",StringType,true)
+-- MAGIC .add("TAA",StringType,true)
+-- MAGIC
+-- MAGIC
+-- MAGIC val LUT_nuts2021  = spark.read.format("csv")
+-- MAGIC  .options(Map("delimiter"->"|"))
+-- MAGIC  .schema(schema_nuts2021)
+-- MAGIC  .load("dbfs:/mnt/trainingDatabricks/Lookups/adm_eea39_2021LUT/20200527111402.69.csv") 
+-- MAGIC LUT_nuts2021.createOrReplaceTempView("LUT_nuts2021")
+-- MAGIC
+-- MAGIC
+-- MAGIC /// the following lines constructed a new admin table wiht GRIDNUM and NUTS information:---------------------------------------------
+-- MAGIC
+-- MAGIC val nuts3_2021 = spark.sql(""" 
+-- MAGIC                SELECT 
+-- MAGIC
+-- MAGIC D_admbndEEA39v2021.GridNum,
+-- MAGIC D_admbndEEA39v2021.Category,
+-- MAGIC D_admbndEEA39v2021.AreaHa,
+-- MAGIC D_admbndEEA39v2021.GridNum10km,
+-- MAGIC LUT_nuts2021.ADM_ID,
+-- MAGIC LUT_nuts2021.ADM_COUNTRY	,
+-- MAGIC LUT_nuts2021.ISO2	,
+-- MAGIC LUT_nuts2021.LEVEL3_name	,
+-- MAGIC LUT_nuts2021.LEVEL2_name	,
+-- MAGIC LUT_nuts2021.LEVEL1_name	,
+-- MAGIC LUT_nuts2021.LEVEL0_name	,
+-- MAGIC LUT_nuts2021.LEVEL3_code	,
+-- MAGIC LUT_nuts2021.LEVEL2_code	,
+-- MAGIC LUT_nuts2021.LEVEL1_code	,
+-- MAGIC LUT_nuts2021.LEVEL0_code	,
+-- MAGIC LUT_nuts2021.EEA32_2020	,
+-- MAGIC LUT_nuts2021.EEA38_2020,	
+-- MAGIC LUT_nuts2021.EEA39	,
+-- MAGIC LUT_nuts2021.EEA33	,
+-- MAGIC LUT_nuts2021.EEA32_2006,	
+-- MAGIC LUT_nuts2021.EU27_2020	,
+-- MAGIC LUT_nuts2021.EU28	,
+-- MAGIC LUT_nuts2021.EU27_2007,	
+-- MAGIC LUT_nuts2021.EU25	,
+-- MAGIC LUT_nuts2021.EU15	,
+-- MAGIC LUT_nuts2021.EU12	,
+-- MAGIC LUT_nuts2021.EU10	,
+-- MAGIC LUT_nuts2021.EFTA4	,
+-- MAGIC LUT_nuts2021.NUTS_EU,	
+-- MAGIC LUT_nuts2021.TAA	
+-- MAGIC
+-- MAGIC FROM D_admbndEEA39v2021 
+-- MAGIC   LEFT JOIN LUT_nuts2021  ON D_admbndEEA39v2021.Category = LUT_nuts2021.ADM_ID     
+-- MAGIC                                   """)
+-- MAGIC
+-- MAGIC nuts3_2021.createOrReplaceTempView("nuts3_2021")
+-- MAGIC //################################################################################################
+
+-- COMMAND ----------
+
+-- MAGIC %md #### Wildfires
+
+-- COMMAND ----------
+
+-- MAGIC %scala
+-- MAGIC /// WILD FIRE 
+-- MAGIC
+-- MAGIC val lut_fire  = spark.read.format("csv")
+-- MAGIC .options(Map("delimiter"->","))
+-- MAGIC  .option("header", "true")
+-- MAGIC       .load("dbfs:/mnt/trainingDatabricks/LookupTablesFiles/LUT_EFFIS_Fires_00_22_v2_146.csv")
+-- MAGIC lut_fire.createOrReplaceTempView("LUT_fire")
+-- MAGIC //cwsblobstorage01/cwsblob01/Lookups/Wildfires0022LUT/20220718121715.823.csv
+-- MAGIC //https://cwsblobstorage01.blob.core.windows.net/cwsblob01/LookupTablesFiles/LUT_EFFIS_Fires_00_22_138.csv
+-- MAGIC
+-- MAGIC //https://cwsblobstorage01.blob.core.windows.net/cwsblob01/LookupTablesFiles/LUT_EFFIS_Fires_00_22_v23_138.csv
+-- MAGIC val parquetFileDF_wildfire = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_Wildfires0021_905_202331_100m/")
+-- MAGIC
+-- MAGIC
+-- MAGIC parquetFileDF_wildfire.createOrReplaceTempView("wildfire")
+-- MAGIC
+-- MAGIC val fire_sq1 = spark.sql(""" 
+-- MAGIC          select 
+-- MAGIC GridNum,
+-- MAGIC p2000.MONTH as FIREDATE_2000,
+-- MAGIC p2001.MONTH as FIREDATE_2001,
+-- MAGIC p2002.MONTH as FIREDATE_2002,
+-- MAGIC p2003.MONTH as FIREDATE_2003,
+-- MAGIC p2004.MONTH as FIREDATE_2004,
+-- MAGIC p2005.MONTH as FIREDATE_2005,
+-- MAGIC p2006.MONTH as FIREDATE_2006,
+-- MAGIC p2007.MONTH as FIREDATE_2007,
+-- MAGIC p2008.MONTH as FIREDATE_2008,
+-- MAGIC p2009.MONTH as FIREDATE_2009,
+-- MAGIC p2010.MONTH as FIREDATE_2010,
+-- MAGIC p2011.MONTH as FIREDATE_2011,
+-- MAGIC p2012.MONTH as FIREDATE_2012,
+-- MAGIC p2013.MONTH as FIREDATE_2013,
+-- MAGIC p2014.MONTH as FIREDATE_2014,
+-- MAGIC p2015.MONTH as FIREDATE_2015,
+-- MAGIC p2016.MONTH as FIREDATE_2016,
+-- MAGIC p2017.MONTH as FIREDATE_2017,
+-- MAGIC p2018.MONTH as FIREDATE_2018,
+-- MAGIC p2019.MONTH as FIREDATE_2019,
+-- MAGIC p2020.MONTH as FIREDATE_2020,
+-- MAGIC p2021.MONTH as FIREDATE_2021,
+-- MAGIC p2022.MONTH as FIREDATE_2022,
+-- MAGIC
+-- MAGIC p2000.EFFISID as EFFISID_2000,
+-- MAGIC p2001.EFFISID as EFFISID_2001,
+-- MAGIC p2002.EFFISID as EFFISID_2002,
+-- MAGIC p2003.EFFISID as EFFISID_2003,
+-- MAGIC p2004.EFFISID as EFFISID_2004,
+-- MAGIC p2005.EFFISID as EFFISID_2005,
+-- MAGIC p2006.EFFISID as EFFISID_2006,
+-- MAGIC p2007.EFFISID as EFFISID_2007,
+-- MAGIC p2008.EFFISID as EFFISID_2008,
+-- MAGIC p2009.EFFISID as EFFISID_2009,
+-- MAGIC p2010.EFFISID as EFFISID_2010,
+-- MAGIC p2011.EFFISID as EFFISID_2011,
+-- MAGIC p2012.EFFISID as EFFISID_2012,
+-- MAGIC p2013.EFFISID as EFFISID_2013,
+-- MAGIC p2014.EFFISID as EFFISID_2014,
+-- MAGIC p2015.EFFISID as EFFISID_2015,
+-- MAGIC p2016.EFFISID as EFFISID_2016,
+-- MAGIC p2017.EFFISID as EFFISID_2017,
+-- MAGIC p2018.EFFISID as EFFISID_2018,
+-- MAGIC p2019.EFFISID as EFFISID_2019,
+-- MAGIC p2020.EFFISID as EFFISID_2020,
+-- MAGIC p2021.EFFISID as EFFISID_2021,
+-- MAGIC p2022.EFFISID as EFFISID_2022,
+-- MAGIC
+-- MAGIC
+-- MAGIC GridNum10km,
+-- MAGIC
+-- MAGIC AreaHa
+-- MAGIC from wildfire 
+-- MAGIC
+-- MAGIC LEFT JOIN   LUT_fire     as p2000 ON  wildfire.BA2000  = p2000.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2001 ON  wildfire.BA2001  = p2001.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2002 ON  wildfire.BA2002  = p2002.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2003 ON  wildfire.BA2003  = p2003.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2004 ON  wildfire.BA2004  = p2004.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2005 ON  wildfire.BA2005  = p2005.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2006 ON  wildfire.BA2006  = p2006.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2007 ON  wildfire.BA2007  = p2007.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2008 ON  wildfire.BA2008  = p2008.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2009 ON  wildfire.BA2009  = p2009.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2010 ON  wildfire.BA2010  = p2010.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2011 ON  wildfire.BA2011  = p2011.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2012 ON  wildfire.BA2012  = p2012.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2013 ON  wildfire.BA2013  = p2013.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2014 ON  wildfire.BA2014  = p2014.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2015 ON  wildfire.BA2015  = p2015.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2016 ON  wildfire.BA2016  = p2016.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2017 ON  wildfire.BA2017  = p2017.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2018 ON  wildfire.BA2018  = p2018.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2019 ON  wildfire.BA2019  = p2019.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2020 ON  wildfire.BA2020  = p2020.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2021 ON  wildfire.BA2021  = p2021.EFFISID 
+-- MAGIC LEFT JOIN   LUT_fire     as p2022 ON  wildfire.BA2022  = p2022.EFFISID                       
+-- MAGIC                                                         """)
+-- MAGIC                                   
+-- MAGIC fire_sq1.createOrReplaceTempView("fire")
+-- MAGIC
+-- MAGIC
+-- MAGIC
+-- MAGIC val fire_year_month = spark.sql(""" 
+-- MAGIC          select 
+-- MAGIC         GridNum,
+-- MAGIC
+-- MAGIC  FIREDATE_2000,
+-- MAGIC         ifnull(IF(FIREDATE_2000= 1, 1,0),0 )  as y2000_jan,
+-- MAGIC
+-- MAGIC         ifnull(IF(FIREDATE_2000= 2, 1,0) ,0 )  as y2000_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2000= 3, 1,0) ,0 )  as y2000_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2000= 4, 1,0) ,0 )  as y2000_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2000= 5, 1,0) ,0 )  as y2000_may,
+-- MAGIC         ifnull(IF(FIREDATE_2000= 6, 1,0) ,0 )  as y2000_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2000= 7, 1,0) ,0 )  as y2000_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2000= 8, 1,0) ,0 )  as y2000_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2000= 9, 1,0) ,0 )  as y2000_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2000= 10, 1,0) ,0 )  as y2000_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2000= 11, 1,0) ,0 )  as y2000_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2000= 12, 1,0) ,0 )  as y2000_dec,
+-- MAGIC
+-- MAGIC         FIREDATE_2001,
+-- MAGIC         ifnull(IF(FIREDATE_2001= 1, 1,0),0 )  as y2001_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2001= 2, 1,0) ,0 )  as y2001_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2001= 3, 1,0) ,0 )  as y2001_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2001= 4, 1,0) ,0 )  as y2001_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2001= 5, 1,0) ,0 )  as y2001_may,
+-- MAGIC         ifnull(IF(FIREDATE_2001= 6, 1,0) ,0 )  as y2001_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2001= 7, 1,0) ,0 )  as y2001_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2001= 8, 1,0) ,0 )  as y2001_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2001= 9, 1,0) ,0 )  as y2001_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2001= 10, 1,0) ,0 )  as y2001_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2001= 11, 1,0) ,0 )  as y2001_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2001= 12, 1,0) ,0 )  as y2001_dec,
+-- MAGIC
+-- MAGIC
+-- MAGIC         FIREDATE_2002,
+-- MAGIC         ifnull(IF(FIREDATE_2002= 1, 1,0) ,0 )  as y2002_jan,
+-- MAGIC          ifnull(IF(FIREDATE_2002= 2, 1,0) ,0 )  as y2002_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2002= 3, 1,0) ,0 )  as y2002_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2002= 4, 1,0) ,0 )  as y2002_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2002= 5, 1,0) ,0 )  as y2002_may,
+-- MAGIC         ifnull(IF(FIREDATE_2002= 6, 1,0) ,0 )  as y2002_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2002= 7, 1,0) ,0 )  as y2002_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2002= 8, 1,0) ,0 )  as y2002_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2002= 9, 1,0) ,0 )  as y2002_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2002= 10, 1,0) ,0 )  as y2002_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2002= 11, 1,0) ,0 )  as y2002_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2002= 12, 1,0) ,0 )  as y2002_dec,
+-- MAGIC
+-- MAGIC         FIREDATE_2003,
+-- MAGIC         ifnull(IF(FIREDATE_2003= 1, 1,0) ,0 )  as y2003_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2003= 2, 1,0) ,0 )  as y2003_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2003= 3, 1,0) ,0 )  as y2003_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2003= 4, 1,0) ,0 )  as y2003_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2003= 5, 1,0) ,0 )  as y2003_may,
+-- MAGIC         ifnull(IF(FIREDATE_2003= 6, 1,0) ,0 )  as y2003_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2003= 7, 1,0) ,0 )  as y2003_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2003= 8, 1,0) ,0 )  as y2003_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2003= 9, 1,0) ,0 )  as y2003_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2003= 10, 1,0) ,0 )  as y2003_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2003= 11, 1,0) ,0 )  as y2003_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2003= 12, 1,0) ,0 )  as y2003_dec,
+-- MAGIC
+-- MAGIC         FIREDATE_2004,
+-- MAGIC         ifnull(IF(FIREDATE_2004= 1, 1,0) ,0 )  as y2004_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2004= 2, 1,0) ,0 )  as y2004_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2004= 3, 1,0) ,0 )  as y2004_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2004= 4, 1,0) ,0 )  as y2004_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2004= 5, 1,0) ,0 )  as y2004_may,
+-- MAGIC         ifnull(IF(FIREDATE_2004= 6, 1,0) ,0 )  as y2004_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2004= 7, 1,0) ,0 )  as y2004_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2004= 8, 1,0) ,0 )  as y2004_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2004= 9, 1,0) ,0 )  as y2004_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2004= 10, 1,0) ,0 )  as y2004_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2004= 11, 1,0) ,0 )  as y2004_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2004= 12, 1,0) ,0 )  as y2004_dec,
+-- MAGIC
+-- MAGIC         FIREDATE_2005,
+-- MAGIC         ifnull(IF(FIREDATE_2005= 1, 1,0) ,0 )  as y2005_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2005= 2, 1,0) ,0 )  as y2005_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2005= 3, 1,0) ,0 )  as y2005_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2005= 4, 1,0) ,0 )  as y2005_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2005= 5, 1,0) ,0 )  as y2005_may,
+-- MAGIC         ifnull(IF(FIREDATE_2005= 6, 1,0) ,0 )  as y2005_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2005= 7, 1,0) ,0 )  as y2005_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2005= 8, 1,0) ,0 )  as y2005_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2005= 9, 1,0) ,0 )  as y2005_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2005= 10, 1,0) ,0 )  as y2005_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2005= 11, 1,0) ,0 )  as y2005_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2005= 12, 1,0) ,0 )  as y2005_dec,
+-- MAGIC
+-- MAGIC
+-- MAGIC         FIREDATE_2006,
+-- MAGIC         ifnull(IF(FIREDATE_2006= 1, 1,0) ,0 )  as y2006_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2006= 2, 1,0) ,0 )  as y2006_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2006= 3, 1,0) ,0 )  as y2006_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2006= 4, 1,0) ,0 )  as y2006_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2006= 5, 1,0) ,0 )  as y2006_may,
+-- MAGIC         ifnull(IF(FIREDATE_2006= 6, 1,0) ,0 )  as y2006_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2006= 7, 1,0) ,0 )  as y2006_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2006= 8, 1,0) ,0 )  as y2006_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2006= 9, 1,0) ,0 )  as y2006_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2006= 10, 1,0) ,0 )  as y2006_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2006= 11, 1,0) ,0 )  as y2006_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2006= 12, 1,0) ,0 )  as y2006_dec,
+-- MAGIC         FIREDATE_2007,
+-- MAGIC         ifnull(IF(FIREDATE_2007= 1, 1,0) ,0 )  as y2007_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2007= 2, 1,0) ,0 )  as y2007_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2007= 3, 1,0) ,0 )  as y2007_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2007= 4, 1,0) ,0 )  as y2007_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2007= 5, 1,0) ,0 )  as y2007_may,
+-- MAGIC         ifnull(IF(FIREDATE_2007= 6, 1,0) ,0 )  as y2007_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2007= 7, 1,0) ,0 )  as y2007_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2007= 8, 1,0) ,0 )  as y2007_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2007= 9, 1,0) ,0 )  as y2007_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2007= 10, 1,0) ,0 )  as y2007_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2007= 11, 1,0) ,0 )  as y2007_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2007= 12, 1,0) ,0 )  as y2007_dec,
+-- MAGIC         FIREDATE_2008,
+-- MAGIC         ifnull(IF(FIREDATE_2008= 1, 1,0) ,0 )  as y2008_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2008= 2, 1,0) ,0 )  as y2008_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2008= 3, 1,0) ,0 )  as y2008_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2008= 4, 1,0) ,0 )  as y2008_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2008= 5, 1,0) ,0 )  as y2008_may,
+-- MAGIC         ifnull(IF(FIREDATE_2008= 6, 1,0) ,0 )  as y2008_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2008= 7, 1,0) ,0 )  as y2008_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2008= 8, 1,0) ,0 )  as y2008_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2008= 9, 1,0) ,0 )  as y2008_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2008= 10, 1,0) ,0 )  as y2008_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2008= 11, 1,0) ,0 )  as y2008_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2008= 12, 1,0) ,0 )  as y2008_dec,
+-- MAGIC         FIREDATE_2009,
+-- MAGIC         ifnull(IF(FIREDATE_2009= 1, 1,0) ,0 )  as y2009_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2009= 2, 1,0) ,0 )  as y2009_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2009= 3, 1,0) ,0 )  as y2009_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2009= 4, 1,0) ,0 )  as y2009_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2009= 5, 1,0) ,0 )  as y2009_may,
+-- MAGIC         ifnull(IF(FIREDATE_2009= 6, 1,0) ,0 )  as y2009_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2009= 7, 1,0) ,0 )  as y2009_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2009= 8, 1,0) ,0 )  as y2009_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2009= 9, 1,0) ,0 )  as y2009_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2009= 10, 1,0) ,0 )  as y2009_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2009= 11, 1,0) ,0 )  as y2009_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2009= 12, 1,0) ,0 )  as y2009_dec,
+-- MAGIC         FIREDATE_2010,
+-- MAGIC         ifnull(IF(FIREDATE_2010= 1, 1,0) ,0 )  as y2010_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2010= 2, 1,0) ,0 )  as y2010_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2010= 3, 1,0) ,0 )  as y2010_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2010= 4, 1,0) ,0 )  as y2010_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2010= 5, 1,0) ,0 )  as y2010_may,
+-- MAGIC         ifnull(IF(FIREDATE_2010= 6, 1,0) ,0 )  as y2010_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2010= 7, 1,0) ,0 )  as y2010_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2010= 8, 1,0) ,0 )  as y2010_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2010= 9, 1,0) ,0 )  as y2010_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2010= 10, 1,0) ,0 )  as y2010_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2010= 11, 1,0) ,0 )  as y2010_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2010= 12, 1,0) ,0 )  as y2010_dec,
+-- MAGIC         FIREDATE_2011,
+-- MAGIC         ifnull(IF(FIREDATE_2011= 1, 1,0) ,0 )  as y2011_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2011= 2, 1,0) ,0 )  as y2011_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2011= 3, 1,0) ,0 )  as y2011_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2011= 4, 1,0) ,0 )  as y2011_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2011= 5, 1,0) ,0 )  as y2011_may,
+-- MAGIC         ifnull(IF(FIREDATE_2011= 6, 1,0) ,0 )  as y2011_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2011= 7, 1,0) ,0 )  as y2011_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2011= 8, 1,0) ,0 )  as y2011_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2011= 9, 1,0) ,0 )  as y2011_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2011= 10, 1,0) ,0 )  as y2011_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2011= 11, 1,0) ,0 )  as y2011_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2011= 12, 1,0) ,0 )  as y2011_dec,
+-- MAGIC         FIREDATE_2012,
+-- MAGIC         ifnull(IF(FIREDATE_2012= 1, 1,0) ,0 )  as y2012_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2012= 2, 1,0) ,0 )  as y2012_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2012= 3, 1,0) ,0 )  as y2012_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2012= 4, 1,0) ,0 )  as y2012_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2012= 5, 1,0) ,0 )  as y2012_may,
+-- MAGIC         ifnull(IF(FIREDATE_2012= 6, 1,0) ,0 )  as y2012_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2012= 7, 1,0) ,0 )  as y2012_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2012= 8, 1,0) ,0 )  as y2012_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2012= 9, 1,0) ,0 )  as y2012_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2012= 10, 1,0) ,0 )  as y2012_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2012= 11, 1,0) ,0 )  as y2012_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2012= 12, 1,0) ,0 )  as y2012_dec,
+-- MAGIC         FIREDATE_2013,
+-- MAGIC         ifnull(IF(FIREDATE_2013= 1, 1,0) ,0 )  as y2013_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2013= 2, 1,0) ,0 )  as y2013_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2013= 3, 1,0) ,0 )  as y2013_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2013= 4, 1,0) ,0 )  as y2013_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2013= 5, 1,0) ,0 )  as y2013_may,
+-- MAGIC         ifnull(IF(FIREDATE_2013= 6, 1,0) ,0 )  as y2013_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2013= 7, 1,0) ,0 )  as y2013_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2013= 8, 1,0) ,0 )  as y2013_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2013= 9, 1,0) ,0 )  as y2013_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2013= 10, 1,0) ,0 )  as y2013_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2013= 11, 1,0) ,0 )  as y2013_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2013= 12, 1,0) ,0 )  as y2013_dec,
+-- MAGIC         FIREDATE_2014,
+-- MAGIC         ifnull(IF(FIREDATE_2014= 1, 1,0) ,0 )  as y2014_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2014= 2, 1,0) ,0 )  as y2014_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2014= 3, 1,0) ,0 )  as y2014_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2014= 4, 1,0) ,0 )  as y2014_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2014= 5, 1,0) ,0 )  as y2014_may,
+-- MAGIC         ifnull(IF(FIREDATE_2014= 6, 1,0) ,0 )  as y2014_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2014= 7, 1,0) ,0 )  as y2014_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2014= 8, 1,0) ,0 )  as y2014_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2014= 9, 1,0) ,0 )  as y2014_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2014= 10, 1,0) ,0 )  as y2014_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2014= 11, 1,0) ,0 )  as y2014_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2014= 12, 1,0) ,0 )  as y2014_dec,
+-- MAGIC         FIREDATE_2015,
+-- MAGIC         ifnull(IF(FIREDATE_2015= 1, 1,0) ,0 )  as y2015_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2015= 2, 1,0) ,0 )  as y2015_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2015= 3, 1,0) ,0 )  as y2015_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2015= 4, 1,0) ,0 )  as y2015_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2015= 5, 1,0) ,0 )  as y2015_may,
+-- MAGIC         ifnull(IF(FIREDATE_2015= 6, 1,0) ,0 )  as y2015_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2015= 7, 1,0) ,0 )  as y2015_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2015= 8, 1,0) ,0 )  as y2015_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2015= 9, 1,0) ,0 )  as y2015_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2015= 10, 1,0) ,0 )  as y2015_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2015= 11, 1,0) ,0 )  as y2015_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2015= 12, 1,0) ,0 )  as y2015_dec,
+-- MAGIC         FIREDATE_2016,
+-- MAGIC         ifnull(IF(FIREDATE_2016= 1, 1,0) ,0 )  as y2016_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2016= 2, 1,0) ,0 )  as y2016_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2016= 3, 1,0) ,0 )  as y2016_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2016= 4, 1,0) ,0 )  as y2016_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2016= 5, 1,0) ,0 )  as y2016_may,
+-- MAGIC         ifnull(IF(FIREDATE_2016= 6, 1,0) ,0 )  as y2016_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2016= 7, 1,0) ,0 )  as y2016_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2016= 8, 1,0) ,0 )  as y2016_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2016= 9, 1,0) ,0 )  as y2016_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2016= 10, 1,0) ,0 )  as y2016_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2016= 11, 1,0) ,0 )  as y2016_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2016= 12, 1,0) ,0 )  as y2016_dec,
+-- MAGIC         FIREDATE_2017,
+-- MAGIC         ifnull(IF(FIREDATE_2017= 1, 1,0) ,0 )  as y2017_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2017= 2, 1,0) ,0 )  as y2017_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2017= 3, 1,0) ,0 )  as y2017_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2017= 4, 1,0) ,0 )  as y2017_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2017= 5, 1,0) ,0 )  as y2017_may,
+-- MAGIC         ifnull(IF(FIREDATE_2017= 6, 1,0) ,0 )  as y2017_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2017= 7, 1,0) ,0 )  as y2017_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2017= 8, 1,0) ,0 )  as y2017_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2017= 9, 1,0) ,0 )  as y2017_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2017= 10, 1,0) ,0 )  as y2017_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2017= 11, 1,0) ,0 )  as y2017_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2017= 12, 1,0) ,0 )  as y2017_dec,
+-- MAGIC         FIREDATE_2018,
+-- MAGIC         ifnull(IF(FIREDATE_2018= 1, 1,0) ,0 )  as y2018_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2018= 2, 1,0) ,0 )  as y2018_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2018= 3, 1,0) ,0 )  as y2018_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2018= 4, 1,0) ,0 )  as y2018_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2018= 5, 1,0) ,0 )  as y2018_may,
+-- MAGIC         ifnull(IF(FIREDATE_2018= 6, 1,0) ,0 )  as y2018_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2018= 7, 1,0) ,0 )  as y2018_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2018= 8, 1,0) ,0 )  as y2018_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2018= 9, 1,0) ,0 )  as y2018_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2018= 10, 1,0) ,0 )  as y2018_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2018= 11, 1,0) ,0 )  as y2018_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2018= 12, 1,0) ,0 )  as y2018_dec,
+-- MAGIC         FIREDATE_2019,
+-- MAGIC         ifnull(IF(FIREDATE_2019= 1, 1,0) ,0 )  as y2019_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2019= 2, 1,0) ,0 )  as y2019_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2019= 3, 1,0) ,0 )  as y2019_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2019= 4, 1,0) ,0 )  as y2019_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2019= 5, 1,0) ,0 )  as y2019_may,
+-- MAGIC         ifnull(IF(FIREDATE_2019= 6, 1,0) ,0 )  as y2019_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2019= 7, 1,0) ,0 )  as y2019_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2019= 8, 1,0) ,0 )  as y2019_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2019= 9, 1,0) ,0 )  as y2019_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2019= 10, 1,0) ,0 )  as y2019_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2019= 11, 1,0) ,0 )  as y2019_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2019= 12, 1,0) ,0 )  as y2019_dec,
+-- MAGIC         FIREDATE_2020,
+-- MAGIC         ifnull(IF(FIREDATE_2020= 1, 1,0) ,0 )  as y2020_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2020= 2, 1,0) ,0 )  as y2020_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2020= 3, 1,0) ,0 )  as y2020_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2020= 4, 1,0) ,0 )  as y2020_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2020= 5, 1,0) ,0 )  as y2020_may,
+-- MAGIC         ifnull(IF(FIREDATE_2020= 6, 1,0) ,0 )  as y2020_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2020= 7, 1,0) ,0 )  as y2020_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2020= 8, 1,0) ,0 )  as y2020_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2020= 9, 1,0) ,0 )  as y2020_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2020= 10, 1,0) ,0 )  as y2020_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2020= 11, 1,0) ,0 )  as y2020_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2020= 12, 1,0) ,0 )  as y2020_dec,
+-- MAGIC         FIREDATE_2021,
+-- MAGIC         ifnull(IF(FIREDATE_2021= 1, 1,0) ,0 )  as y2021_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2021= 2, 1,0) ,0 )  as y2021_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2021= 3, 1,0) ,0 )  as y2021_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2021= 4, 1,0) ,0 )  as y2021_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2021= 5, 1,0) ,0 )  as y2021_may,
+-- MAGIC         ifnull(IF(FIREDATE_2021= 6, 1,0) ,0 )  as y2021_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2021= 7, 1,0) ,0 )  as y2021_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2021= 8, 1,0) ,0 )  as y2021_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2021= 9, 1,0) ,0 )  as y2021_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2021= 10, 1,0) ,0 )  as y2021_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2021= 11, 1,0) ,0 )  as y2021_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2021= 12, 1,0) ,0 )  as y2021_dec,
+-- MAGIC         FIREDATE_2022,
+-- MAGIC         ifnull(IF(FIREDATE_2022= 1, 1,0) ,0 )  as y2022_jan,
+-- MAGIC         ifnull(IF(FIREDATE_2022= 2, 1,0) ,0 )  as y2022_feb,
+-- MAGIC         ifnull(IF(FIREDATE_2022= 3, 1,0) ,0 )  as y2022_mar,
+-- MAGIC         ifnull(IF(FIREDATE_2022= 4, 1,0) ,0 )  as y2022_apr,
+-- MAGIC         ifnull(IF(FIREDATE_2022= 5, 1,0) ,0 )  as y2022_may,
+-- MAGIC         ifnull(IF(FIREDATE_2022= 6, 1,0) ,0 )  as y2022_jun,
+-- MAGIC         ifnull(IF(FIREDATE_2022= 7, 1,0) ,0 )  as y2022_jul,
+-- MAGIC         ifnull(IF(FIREDATE_2022= 8, 1,0) ,0 )  as y2022_aug,
+-- MAGIC         ifnull(IF(FIREDATE_2022= 9, 1,0) ,0 )  as y2022_sep,
+-- MAGIC         ifnull(IF(FIREDATE_2022= 10, 1,0) ,0 )  as y2022_oct,
+-- MAGIC         ifnull(IF(FIREDATE_2022= 11, 1,0) ,0 )  as y2022_nov,
+-- MAGIC         ifnull(IF(FIREDATE_2022= 12, 1,0) ,0 )  as y2022_dec,
+-- MAGIC
+-- MAGIC         '2000-2022' as time
+-- MAGIC         
+-- MAGIC         from fire 
+-- MAGIC
+-- MAGIC  """)
+-- MAGIC                                   
+-- MAGIC fire_year_month.createOrReplaceTempView("fire_month_year")
+
+-- COMMAND ----------
+
+select * from wildfire limit (10)
+
+-- COMMAND ----------
+
+select count(gridnum) from wildfire
+
+-- COMMAND ----------
+
+-- QC BA2022
+select count(GridNum) from fire_month_year---where ADM_ID >0 ---group by GridNum
+
+-- COMMAND ----------
+
+-- MAGIC %md #### Protected areas
+
+-- COMMAND ----------
+
+-- MAGIC %scala
+-- MAGIC val PA2022 = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_PA2022_100m_935_20221111_100m/")             /// use load
+-- MAGIC PA2022.createOrReplaceTempView("PA2022")
+
+-- COMMAND ----------
+
+-- MAGIC %md #### MAES based on CLC
+
+-- COMMAND ----------
+
+-- MAGIC %scala
+-- MAGIC //// (1) CLC and LUT-clc for MAES classes ################################################################################
+-- MAGIC //##########################################################################################################################################
+-- MAGIC // The following lines are reading the CLC 2018 DIMS and extracted the MAES classes:
+-- MAGIC // Reading CLC2018 100m DIM:.....
+-- MAGIC val parquetFileDF_clc18 = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_A_CLC_18_210_20181129_100m/")
+-- MAGIC parquetFileDF_clc18.createOrReplaceTempView("CLC_2018")
+-- MAGIC
+-- MAGIC // Reading the LUT for CLC...:
+-- MAGIC val lut_clc  = spark.read.format("csv")
+-- MAGIC .options(Map("delimiter"->","))
+-- MAGIC  .option("header", "true")
+-- MAGIC    .load("dbfs:/mnt/trainingDatabricks/LookupTablesFiles/Corine_Land_Cover_LUT_JEDI_4.csv")     ////------Lookup_CLC_07112022_4.csv   Lookup_CLC_24032021_4.csv
+-- MAGIC lut_clc.createOrReplaceTempView("LUT_clc_classes")
+-- MAGIC // Construction of a new table: with MAES level 1 classes bases on CLC2018 100m:...................
+-- MAGIC val maes_sq1 = spark.sql(""" 
+-- MAGIC                    SELECT                
+-- MAGIC                   CLC_2018.GridNum,
+-- MAGIC                   CLC_2018.GridNum10km,                     
+-- MAGIC                   CONCAT('MAES_',LUT_clc_classes.MAES_CODE) as MAES_CODE ,                  
+-- MAGIC                   CLC_2018.AreaHa
+-- MAGIC                   from CLC_2018   
+-- MAGIC                   LEFT JOIN   LUT_clc_classes  
+-- MAGIC                      ON  CLC_2018.Category  = LUT_clc_classes.LEVEL3_CODE where AreaHa = 1                                 
+-- MAGIC                                                         """)                                  
+-- MAGIC maes_sq1.createOrReplaceTempView("maes_sq1")  
+-- MAGIC
+-- MAGIC
+-- MAGIC /// for the export wie produce allready a 10km/maes table:
+-- MAGIC val maes_sq1_10km = spark.sql(""" 
+-- MAGIC Select GridNum10km, MAES_CODE, SUM(AreaHa) as MAES_area_ha from maes_sq1
+-- MAGIC group by GridNum10km, MAES_CODE
+-- MAGIC                                                         """)                                  
+-- MAGIC maes_sq1_10km.createOrReplaceTempView("maes_sq1_10km")  
+-- MAGIC
+-- MAGIC
+-- MAGIC
+-- MAGIC /// for the export wie produce allready a nuts3/maes table:
+-- MAGIC val nuts3_maes = spark.sql(""" 
+-- MAGIC select ADM_ID, TAA,LEVEL3_code,NUTS_EU, MAES_CODE, SUM(nuts3_2021.AreaHa) as area_ha_admin 
+-- MAGIC
+-- MAGIC from nuts3_2021
+-- MAGIC       left JOIN maes_sq1 ON nuts3_2021.GridNum = maes_sq1.GridNum
+-- MAGIC       group by ADM_ID, TAA,LEVEL3_code,NUTS_EU,MAES_CODE
+-- MAGIC                                                         """)                                  
+-- MAGIC nuts3_maes.createOrReplaceTempView("NUTS3_maes_sq1")  
+-- MAGIC
+-- MAGIC //##########################################################################################################################################
+
+-- COMMAND ----------
+
+-- MAGIC %md #### Environmental Zones
+
+-- COMMAND ----------
+
+-- MAGIC %scala
+-- MAGIC val EnvZones_dim = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_EnvZones_544_2020528_100m/")             /// use load
+-- MAGIC EnvZones_dim.createOrReplaceTempView("D_EnvZones")
+-- MAGIC
+-- MAGIC //// Reading the LUT :---------------------------------------------
+-- MAGIC ///https://jedi.discomap.eea.europa.eu/LookUp/show?lookUpId=66
+-- MAGIC
+-- MAGIC import org.apache.spark.sql.types._
+-- MAGIC val schema_EnvZones = new StructType()
+-- MAGIC .add("Value",IntegerType,true)
+-- MAGIC .add("Description",StringType,true)
+-- MAGIC .add("Text",StringType,true)
+-- MAGIC
+-- MAGIC val LUT_EnvZones  = spark.read.format("csv")
+-- MAGIC  .options(Map("delimiter"->"|"))
+-- MAGIC  .schema(schema_EnvZones)
+-- MAGIC  .load("dbfs:/mnt/trainingDatabricks/Lookups//EnvZones/20200528182525.807.csv")
+-- MAGIC LUT_EnvZones.createOrReplaceTempView("LUT_EnvZones")
+-- MAGIC
+-- MAGIC /// the following lines constructed a new admin table wiht GRIDNUM and NUTS information:---------------------------------------------
+-- MAGIC
+-- MAGIC val EnvZones = spark.sql(""" 
+-- MAGIC                SELECT 
+-- MAGIC
+-- MAGIC D_EnvZones.GridNum,
+-- MAGIC D_EnvZones.Category,
+-- MAGIC D_EnvZones.AreaHa,
+-- MAGIC D_EnvZones.GridNum10km,
+-- MAGIC LUT_EnvZones.Description,
+-- MAGIC LUT_EnvZones.Text	
+-- MAGIC
+-- MAGIC FROM D_EnvZones 
+-- MAGIC   LEFT JOIN LUT_EnvZones  ON D_EnvZones.Category = LUT_EnvZones.Description 
+-- MAGIC
+-- MAGIC                                   """)
+-- MAGIC
+-- MAGIC EnvZones.createOrReplaceTempView("EnvZones")
+
+-- COMMAND ----------
+
+-- MAGIC %md #### LandCoverFlows
+
+-- COMMAND ----------
+
+-- MAGIC %scala
+-- MAGIC
+-- MAGIC //##########################################################################################################################################
+-- MAGIC //// (3) CLC and LUT-LandCoverFlows  ################################################################################
+-- MAGIC //##########################################################################################################################################
+-- MAGIC
+-- MAGIC //(A) Reading lookup table for LandCover Flows: #############################################################
+-- MAGIC
+-- MAGIC val schema_lcf = new StructType()
+-- MAGIC .add("SCHANG",IntegerType,true)
+-- MAGIC .add("LCF3",StringType,true)
+-- MAGIC .add("LCF2",StringType,true)
+-- MAGIC .add("LCF1",StringType,true)
+-- MAGIC .add("LCFL3",StringType,true)
+-- MAGIC .add("LCFL2",StringType,true)
+-- MAGIC .add("LCFL1",StringType,true)
+-- MAGIC .add("CHANGE",StringType,true)
+-- MAGIC .add("GRIDCODE",IntegerType,true)
+-- MAGIC .add("CC",IntegerType,true)
+-- MAGIC .add("GCHA",IntegerType,true)
+-- MAGIC .add("lcf3_num",IntegerType,true)
+-- MAGIC .add("Cng_n",IntegerType,true)
+-- MAGIC .add("LTAKE",IntegerType,true)
+-- MAGIC .add("INV_LTAKE",IntegerType,true)
+-- MAGIC .add("LTAKE_ALL",IntegerType,true)
+-- MAGIC .add("LD_code",StringType,true)
+-- MAGIC .add("LD_description",StringType,true)
+-- MAGIC .add("SOC_factor",FloatType,true)
+-- MAGIC
+-- MAGIC
+-- MAGIC val lut_lcf  = spark.read.format("csv")
+-- MAGIC     .options(Map("delimiter"->","))
+-- MAGIC     .schema(schema_lcf)
+-- MAGIC     .option("header", "true")
+-- MAGIC     .load("dbfs:/mnt/trainingDatabricks//LookupTablesFiles/LCF_LUT_version02June2021_68.csv")
+-- MAGIC lut_lcf.createOrReplaceTempView("lcf")
+-- MAGIC
+-- MAGIC
+-- MAGIC
+-- MAGIC //#####################################################
+-- MAGIC //https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=1086&fileId=106
+-- MAGIC
+-- MAGIC //Now joining the LUT to CLC 2000-2018 CLC:
+-- MAGIC
+-- MAGIC val clc0018_dim = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_LCF0018_106_2018328_100m/")             /// use load
+-- MAGIC clc0018_dim.createOrReplaceTempView("clc0018_dim")
+-- MAGIC // joining: clc with lut from lcf
+-- MAGIC val lcf_0018 = spark.sql(""" 
+-- MAGIC                SELECT 
+-- MAGIC                 clc0018_dim.GridNum,
+-- MAGIC                 clc0018_dim.AreaHa,
+-- MAGIC                 clc0018_dim.GridNum10km,
+-- MAGIC                 lcf.SCHANG,
+-- MAGIC                 lcf.LCF3	
+-- MAGIC
+-- MAGIC                 FROM clc0018_dim 
+-- MAGIC   LEFT JOIN lcf  ON clc0018_dim.clc0018 = lcf.SCHANG 
+-- MAGIC
+-- MAGIC                                   """)
+-- MAGIC
+-- MAGIC lcf_0018.createOrReplaceTempView("lcf_0018")
+-- MAGIC
+-- MAGIC
+-- MAGIC
+
+-- COMMAND ----------
+
+
+
+-- COMMAND ----------
+
+-- MAGIC %md ## 2 Join Data
+
+-- COMMAND ----------
+
+-- MAGIC %md ### Wildfires & all dims (NUTS, PA, MAES, EnvZones & LCF)
+
+-- COMMAND ----------
+
+SELECT 
+
+      nuts3_2021.GridNum,
+      nuts3_2021.GridNum10km,
+      nuts3_2021.GridNum & cast(-16777216 as bigint) as GridNum1km, -----######################## new gridnum 1km !!!
+      nuts3_2021.AreaHa,
+      nuts3_2021.ADM_ID,
+      nuts3_2021.ISO2,
+      PA2022.ProtectedArea2022_10m AS PA2022_class,
+      maes_sq1.MAES_CODE,
+      EnvZones.Text,
+      lcf_0018.lcf3,
+      lcf_0018.SCHANG,
+      
+   
+	ifnull(y2000_jan,0),-  
+      ifnull(y2001_jan,0),
+      ifnull(y2002_jan,0),
+      ifnull(y2003_jan,0)
+
+ FROM fire_month_year 
+  LEFT JOIN PA2022      ON fire_month_year.GridNum = PA2022.gridnum
+  LEFT JOIN maes_sq1    ON fire_month_year.GridNum = maes_sq1.GridNum
+  LEFT JOIN EnvZones    ON fire_month_year.GridNum = EnvZones.GridNum
+  LEFT JOIN lcf_0018    ON fire_month_year.GridNum = lcf_0018.GridNum
+  LEFT JOIN nuts3_2021  ON fire_month_year.GridNum = nuts3_2021.GridNum    
+ 
+
+-- COMMAND ----------
+
+-- MAGIC %scala
+-- MAGIC
+-- MAGIC
+-- MAGIC val fire_c_table2 = spark.sql(""" 
+-- MAGIC  
+-- MAGIC
+-- MAGIC SELECT 
+-- MAGIC
+-- MAGIC       nuts3_2021.GridNum,
+-- MAGIC       nuts3_2021.GridNum & cast(-16777216 as bigint) as GridNum1km,
+-- MAGIC       nuts3_2021.GridNum10km,
+-- MAGIC       nuts3_2021.AreaHa,
+-- MAGIC       nuts3_2021.ADM_ID,
+-- MAGIC       nuts3_2021.ISO2,
+-- MAGIC       PA2022.ProtectedArea2022_10m AS PA2022_class,
+-- MAGIC     ---  maes_sq1.MAES_CODE,
+-- MAGIC       EnvZones.Text,
+-- MAGIC       lcf_0018.lcf3,
+-- MAGIC       lcf_0018.SCHANG,
+-- MAGIC       
+-- MAGIC ifnull(y2000_jan,0)  as y2000_jan  ,
+-- MAGIC ifnull(y2000_feb,0)  as y2000_feb  ,
+-- MAGIC ifnull(y2000_mar,0)  as y2000_mar  ,
+-- MAGIC ifnull(y2000_apr,0)  as y2000_apr  ,
+-- MAGIC ifnull(y2000_may,0)  as y2000_may  ,
+-- MAGIC ifnull(y2000_jun,0)  as y2000_jun  ,
+-- MAGIC ifnull(y2000_jul,0)  as y2000_jul  ,
+-- MAGIC ifnull(y2000_aug,0)  as y2000_aug  ,
+-- MAGIC ifnull(y2000_sep,0)  as y2000_sep  ,
+-- MAGIC ifnull(y2000_oct,0)  as y2000_oct  ,
+-- MAGIC ifnull(y2000_nov,0)  as y2000_nov  ,
+-- MAGIC ifnull(y2000_dec,0)  as y2000_dec  ,
+-- MAGIC
+-- MAGIC ifnull(y2001_jan,0)  as y2001_jan  ,
+-- MAGIC ifnull(y2001_feb,0)  as y2001_feb  ,
+-- MAGIC ifnull(y2001_mar,0)  as y2001_mar  ,
+-- MAGIC ifnull(y2001_apr,0)  as y2001_apr  ,
+-- MAGIC ifnull(y2001_may,0)  as y2001_may  ,
+-- MAGIC ifnull(y2001_jun,0)  as y2001_jun  ,
+-- MAGIC ifnull(y2001_jul,0)  as y2001_jul  ,
+-- MAGIC ifnull(y2001_aug,0)  as y2001_aug  ,
+-- MAGIC ifnull(y2001_sep,0)  as y2001_sep  ,
+-- MAGIC ifnull(y2001_oct,0)  as y2001_oct  ,
+-- MAGIC ifnull(y2001_nov,0)  as y2001_nov  ,
+-- MAGIC ifnull(y2001_dec,0)  as y2001_dec  ,
+-- MAGIC
+-- MAGIC ifnull(y2002_jan,0)  as y2002_jan  ,
+-- MAGIC ifnull(y2002_feb,0)  as y2002_feb  ,
+-- MAGIC ifnull(y2002_mar,0)  as y2002_mar  ,
+-- MAGIC ifnull(y2002_apr,0)  as y2002_apr  ,
+-- MAGIC ifnull(y2002_may,0)  as y2002_may  ,
+-- MAGIC ifnull(y2002_jun,0)  as y2002_jun  ,
+-- MAGIC ifnull(y2002_jul,0)  as y2002_jul  ,
+-- MAGIC ifnull(y2002_aug,0)  as y2002_aug  ,
+-- MAGIC ifnull(y2002_sep,0)  as y2002_sep  ,
+-- MAGIC ifnull(y2002_oct,0)  as y2002_oct  ,
+-- MAGIC ifnull(y2002_nov,0)  as y2002_nov  ,
+-- MAGIC ifnull(y2002_dec,0)  as y2002_dec  ,
+-- MAGIC
+-- MAGIC ifnull(y2003_jan,0)  as y2003_jan  ,
+-- MAGIC ifnull(y2003_feb,0)  as y2003_feb  ,
+-- MAGIC ifnull(y2003_mar,0)  as y2003_mar  ,
+-- MAGIC ifnull(y2003_apr,0)  as y2003_apr  ,
+-- MAGIC ifnull(y2003_may,0)  as y2003_may  ,
+-- MAGIC ifnull(y2003_jun,0)  as y2003_jun  ,
+-- MAGIC ifnull(y2003_jul,0)  as y2003_jul  ,
+-- MAGIC ifnull(y2003_aug,0)  as y2003_aug  ,
+-- MAGIC ifnull(y2003_sep,0)  as y2003_sep  ,
+-- MAGIC ifnull(y2003_oct,0)  as y2003_oct  ,
+-- MAGIC ifnull(y2003_nov,0)  as y2003_nov  ,
+-- MAGIC ifnull(y2003_dec,0)  as y2003_dec  ,
+-- MAGIC
+-- MAGIC ifnull(y2004_jan,0)  as y2004_jan  ,
+-- MAGIC ifnull(y2004_feb,0)  as y2004_feb  ,
+-- MAGIC ifnull(y2004_mar,0)  as y2004_mar  ,
+-- MAGIC ifnull(y2004_apr,0)  as y2004_apr  ,
+-- MAGIC ifnull(y2004_may,0)  as y2004_may  ,
+-- MAGIC ifnull(y2004_jun,0)  as y2004_jun  ,
+-- MAGIC ifnull(y2004_jul,0)  as y2004_jul  ,
+-- MAGIC ifnull(y2004_aug,0)  as y2004_aug  ,
+-- MAGIC ifnull(y2004_sep,0)  as y2004_sep  ,
+-- MAGIC ifnull(y2004_oct,0)  as y2004_oct  ,
+-- MAGIC ifnull(y2004_nov,0)  as y2004_nov  ,
+-- MAGIC ifnull(y2004_dec,0)  as y2004_dec  ,
+-- MAGIC
+-- MAGIC ifnull(y2005_jan,0)  as y2005_jan  ,
+-- MAGIC ifnull(y2005_feb,0)  as y2005_feb  ,
+-- MAGIC ifnull(y2005_mar,0)  as y2005_mar  ,
+-- MAGIC ifnull(y2005_apr,0)  as y2005_apr  ,
+-- MAGIC ifnull(y2005_may,0)  as y2005_may  ,
+-- MAGIC ifnull(y2005_jun,0)  as y2005_jun  ,
+-- MAGIC ifnull(y2005_jul,0)  as y2005_jul  ,
+-- MAGIC ifnull(y2005_aug,0)  as y2005_aug  ,
+-- MAGIC ifnull(y2005_sep,0)  as y2005_sep  ,
+-- MAGIC ifnull(y2005_oct,0)  as y2005_oct  ,
+-- MAGIC ifnull(y2005_nov,0)  as y2005_nov  ,
+-- MAGIC ifnull(y2005_dec,0)  as y2005_dec  ,
+-- MAGIC
+-- MAGIC ifnull(y2006_jan,0)  as y2006_jan  ,
+-- MAGIC ifnull(y2006_feb,0)  as y2006_feb  ,
+-- MAGIC ifnull(y2006_mar,0)  as y2006_mar  ,
+-- MAGIC ifnull(y2006_apr,0)  as y2006_apr  ,
+-- MAGIC ifnull(y2006_may,0)  as y2006_may  ,
+-- MAGIC ifnull(y2006_jun,0)  as y2006_jun  ,
+-- MAGIC ifnull(y2006_jul,0)  as y2006_jul  ,
+-- MAGIC ifnull(y2006_aug,0)  as y2006_aug  ,
+-- MAGIC ifnull(y2006_sep,0)  as y2006_sep  ,
+-- MAGIC ifnull(y2006_oct,0)  as y2006_oct  ,
+-- MAGIC ifnull(y2006_nov,0)  as y2006_nov  ,
+-- MAGIC ifnull(y2006_dec,0)  as y2006_dec  ,
+-- MAGIC ifnull(y2007_jan,0)  as y2007_jan  ,
+-- MAGIC ifnull(y2007_feb,0)  as y2007_feb  ,
+-- MAGIC ifnull(y2007_mar,0)  as y2007_mar  ,
+-- MAGIC ifnull(y2007_apr,0)  as y2007_apr  ,
+-- MAGIC ifnull(y2007_may,0)  as y2007_may  ,
+-- MAGIC ifnull(y2007_jun,0)  as y2007_jun  ,
+-- MAGIC ifnull(y2007_jul,0)  as y2007_jul  ,
+-- MAGIC ifnull(y2007_aug,0)  as y2007_aug  ,
+-- MAGIC ifnull(y2007_sep,0)  as y2007_sep  ,
+-- MAGIC ifnull(y2007_oct,0)  as y2007_oct  ,
+-- MAGIC ifnull(y2007_nov,0)  as y2007_nov  ,
+-- MAGIC ifnull(y2007_dec,0)  as y2007_dec  ,
+-- MAGIC ifnull(y2008_jan,0)  as y2008_jan  ,
+-- MAGIC ifnull(y2008_feb,0)  as y2008_feb  ,
+-- MAGIC ifnull(y2008_mar,0)  as y2008_mar  ,
+-- MAGIC ifnull(y2008_apr,0)  as y2008_apr  ,
+-- MAGIC ifnull(y2008_may,0)  as y2008_may  ,
+-- MAGIC ifnull(y2008_jun,0)  as y2008_jun  ,
+-- MAGIC ifnull(y2008_jul,0)  as y2008_jul  ,
+-- MAGIC ifnull(y2008_aug,0)  as y2008_aug  ,
+-- MAGIC ifnull(y2008_sep,0)  as y2008_sep  ,
+-- MAGIC ifnull(y2008_oct,0)  as y2008_oct  ,
+-- MAGIC ifnull(y2008_nov,0)  as y2008_nov  ,
+-- MAGIC ifnull(y2008_dec,0)  as y2008_dec  ,
+-- MAGIC ifnull(y2009_jan,0)  as y2009_jan  ,
+-- MAGIC ifnull(y2009_feb,0)  as y2009_feb  ,
+-- MAGIC ifnull(y2009_mar,0)  as y2009_mar  ,
+-- MAGIC ifnull(y2009_apr,0)  as y2009_apr  ,
+-- MAGIC ifnull(y2009_may,0)  as y2009_may  ,
+-- MAGIC ifnull(y2009_jun,0)  as y2009_jun  ,
+-- MAGIC ifnull(y2009_jul,0)  as y2009_jul  ,
+-- MAGIC ifnull(y2009_aug,0)  as y2009_aug  ,
+-- MAGIC ifnull(y2009_sep,0)  as y2009_sep  ,
+-- MAGIC ifnull(y2009_oct,0)  as y2009_oct  ,
+-- MAGIC ifnull(y2009_nov,0)  as y2009_nov  ,
+-- MAGIC ifnull(y2009_dec,0)  as y2009_dec  ,
+-- MAGIC ifnull(y2010_jan,0)  as y2010_jan  ,
+-- MAGIC ifnull(y2010_feb,0)  as y2010_feb  ,
+-- MAGIC ifnull(y2010_mar,0)  as y2010_mar  ,
+-- MAGIC ifnull(y2010_apr,0)  as y2010_apr  ,
+-- MAGIC ifnull(y2010_may,0)  as y2010_may  ,
+-- MAGIC ifnull(y2010_jun,0)  as y2010_jun  ,
+-- MAGIC ifnull(y2010_jul,0)  as y2010_jul  ,
+-- MAGIC ifnull(y2010_aug,0)  as y2010_aug  ,
+-- MAGIC ifnull(y2010_sep,0)  as y2010_sep  ,
+-- MAGIC ifnull(y2010_oct,0)  as y2010_oct  ,
+-- MAGIC ifnull(y2010_nov,0)  as y2010_nov  ,
+-- MAGIC ifnull(y2010_dec,0)  as y2010_dec  ,
+-- MAGIC ifnull(y2011_jan,0)  as y2011_jan  ,
+-- MAGIC ifnull(y2011_feb,0)  as y2011_feb  ,
+-- MAGIC ifnull(y2011_mar,0)  as y2011_mar  ,
+-- MAGIC ifnull(y2011_apr,0)  as y2011_apr  ,
+-- MAGIC ifnull(y2011_may,0)  as y2011_may  ,
+-- MAGIC ifnull(y2011_jun,0)  as y2011_jun  ,
+-- MAGIC ifnull(y2011_jul,0)  as y2011_jul  ,
+-- MAGIC ifnull(y2011_aug,0)  as y2011_aug  ,
+-- MAGIC ifnull(y2011_sep,0)  as y2011_sep  ,
+-- MAGIC ifnull(y2011_oct,0)  as y2011_oct  ,
+-- MAGIC ifnull(y2011_nov,0)  as y2011_nov  ,
+-- MAGIC ifnull(y2011_dec,0)  as y2011_dec  ,
+-- MAGIC ifnull(y2012_jan,0)  as y2012_jan  ,
+-- MAGIC ifnull(y2012_feb,0)  as y2012_feb  ,
+-- MAGIC ifnull(y2012_mar,0)  as y2012_mar  ,
+-- MAGIC ifnull(y2012_apr,0)  as y2012_apr  ,
+-- MAGIC ifnull(y2012_may,0)  as y2012_may  ,
+-- MAGIC ifnull(y2012_jun,0)  as y2012_jun  ,
+-- MAGIC ifnull(y2012_jul,0)  as y2012_jul  ,
+-- MAGIC ifnull(y2012_aug,0)  as y2012_aug  ,
+-- MAGIC ifnull(y2012_sep,0)  as y2012_sep  ,
+-- MAGIC ifnull(y2012_oct,0)  as y2012_oct  ,
+-- MAGIC ifnull(y2012_nov,0)  as y2012_nov  ,
+-- MAGIC ifnull(y2012_dec,0)  as y2012_dec  ,
+-- MAGIC ifnull(y2013_jan,0)  as y2013_jan  ,
+-- MAGIC ifnull(y2013_feb,0)  as y2013_feb  ,
+-- MAGIC ifnull(y2013_mar,0)  as y2013_mar  ,
+-- MAGIC ifnull(y2013_apr,0)  as y2013_apr  ,
+-- MAGIC ifnull(y2013_may,0)  as y2013_may  ,
+-- MAGIC ifnull(y2013_jun,0)  as y2013_jun  ,
+-- MAGIC ifnull(y2013_jul,0)  as y2013_jul  ,
+-- MAGIC ifnull(y2013_aug,0)  as y2013_aug  ,
+-- MAGIC ifnull(y2013_sep,0)  as y2013_sep  ,
+-- MAGIC ifnull(y2013_oct,0)  as y2013_oct  ,
+-- MAGIC ifnull(y2013_nov,0)  as y2013_nov  ,
+-- MAGIC ifnull(y2013_dec,0)  as y2013_dec  ,
+-- MAGIC ifnull(y2014_jan,0)  as y2014_jan  ,
+-- MAGIC ifnull(y2014_feb,0)  as y2014_feb  ,
+-- MAGIC ifnull(y2014_mar,0)  as y2014_mar  ,
+-- MAGIC ifnull(y2014_apr,0)  as y2014_apr  ,
+-- MAGIC ifnull(y2014_may,0)  as y2014_may  ,
+-- MAGIC ifnull(y2014_jun,0)  as y2014_jun  ,
+-- MAGIC ifnull(y2014_jul,0)  as y2014_jul  ,
+-- MAGIC ifnull(y2014_aug,0)  as y2014_aug  ,
+-- MAGIC ifnull(y2014_sep,0)  as y2014_sep  ,
+-- MAGIC ifnull(y2014_oct,0)  as y2014_oct  ,
+-- MAGIC ifnull(y2014_nov,0)  as y2014_nov  ,
+-- MAGIC ifnull(y2014_dec,0)  as y2014_dec  ,
+-- MAGIC ifnull(y2015_jan,0)  as y2015_jan  ,
+-- MAGIC ifnull(y2015_feb,0)  as y2015_feb  ,
+-- MAGIC ifnull(y2015_mar,0)  as y2015_mar  ,
+-- MAGIC ifnull(y2015_apr,0)  as y2015_apr  ,
+-- MAGIC ifnull(y2015_may,0)  as y2015_may  ,
+-- MAGIC ifnull(y2015_jun,0)  as y2015_jun  ,
+-- MAGIC ifnull(y2015_jul,0)  as y2015_jul  ,
+-- MAGIC ifnull(y2015_aug,0)  as y2015_aug  ,
+-- MAGIC ifnull(y2015_sep,0)  as y2015_sep  ,
+-- MAGIC ifnull(y2015_oct,0)  as y2015_oct  ,
+-- MAGIC ifnull(y2015_nov,0)  as y2015_nov  ,
+-- MAGIC ifnull(y2015_dec,0)  as y2015_dec  ,
+-- MAGIC ifnull(y2016_jan,0)  as y2016_jan  ,
+-- MAGIC ifnull(y2016_feb,0)  as y2016_feb  ,
+-- MAGIC ifnull(y2016_mar,0)  as y2016_mar  ,
+-- MAGIC ifnull(y2016_apr,0)  as y2016_apr  ,
+-- MAGIC ifnull(y2016_may,0)  as y2016_may  ,
+-- MAGIC ifnull(y2016_jun,0)  as y2016_jun  ,
+-- MAGIC ifnull(y2016_jul,0)  as y2016_jul  ,
+-- MAGIC ifnull(y2016_aug,0)  as y2016_aug  ,
+-- MAGIC ifnull(y2016_sep,0)  as y2016_sep  ,
+-- MAGIC ifnull(y2016_oct,0)  as y2016_oct  ,
+-- MAGIC ifnull(y2016_nov,0)  as y2016_nov  ,
+-- MAGIC ifnull(y2016_dec,0)  as y2016_dec  ,
+-- MAGIC ifnull(y2017_jan,0)  as y2017_jan  ,
+-- MAGIC ifnull(y2017_feb,0)  as y2017_feb  ,
+-- MAGIC ifnull(y2017_mar,0)  as y2017_mar  ,
+-- MAGIC ifnull(y2017_apr,0)  as y2017_apr  ,
+-- MAGIC ifnull(y2017_may,0)  as y2017_may  ,
+-- MAGIC ifnull(y2017_jun,0)  as y2017_jun  ,
+-- MAGIC ifnull(y2017_jul,0)  as y2017_jul  ,
+-- MAGIC ifnull(y2017_aug,0)  as y2017_aug  ,
+-- MAGIC ifnull(y2017_sep,0)  as y2017_sep  ,
+-- MAGIC ifnull(y2017_oct,0)  as y2017_oct  ,
+-- MAGIC ifnull(y2017_nov,0)  as y2017_nov  ,
+-- MAGIC ifnull(y2017_dec,0)  as y2017_dec  ,
+-- MAGIC ifnull(y2018_jan,0)  as y2018_jan  ,
+-- MAGIC ifnull(y2018_feb,0)  as y2018_feb  ,
+-- MAGIC ifnull(y2018_mar,0)  as y2018_mar  ,
+-- MAGIC ifnull(y2018_apr,0)  as y2018_apr  ,
+-- MAGIC ifnull(y2018_may,0)  as y2018_may  ,
+-- MAGIC ifnull(y2018_jun,0)  as y2018_jun  ,
+-- MAGIC ifnull(y2018_jul,0)  as y2018_jul  ,
+-- MAGIC ifnull(y2018_aug,0)  as y2018_aug  ,
+-- MAGIC ifnull(y2018_sep,0)  as y2018_sep  ,
+-- MAGIC ifnull(y2018_oct,0)  as y2018_oct  ,
+-- MAGIC ifnull(y2018_nov,0)  as y2018_nov  ,
+-- MAGIC ifnull(y2018_dec,0)  as y2018_dec  ,
+-- MAGIC ifnull(y2019_jan,0)  as y2019_jan  ,
+-- MAGIC ifnull(y2019_feb,0)  as y2019_feb  ,
+-- MAGIC ifnull(y2019_mar,0)  as y2019_mar  ,
+-- MAGIC ifnull(y2019_apr,0)  as y2019_apr  ,
+-- MAGIC ifnull(y2019_may,0)  as y2019_may  ,
+-- MAGIC ifnull(y2019_jun,0)  as y2019_jun  ,
+-- MAGIC ifnull(y2019_jul,0)  as y2019_jul  ,
+-- MAGIC ifnull(y2019_aug,0)  as y2019_aug  ,
+-- MAGIC ifnull(y2019_sep,0)  as y2019_sep  ,
+-- MAGIC ifnull(y2019_oct,0)  as y2019_oct  ,
+-- MAGIC ifnull(y2019_nov,0)  as y2019_nov  ,
+-- MAGIC ifnull(y2019_dec,0)  as y2019_dec  ,
+-- MAGIC ifnull(y2020_jan,0)  as y2020_jan  ,
+-- MAGIC ifnull(y2020_feb,0)  as y2020_feb  ,
+-- MAGIC ifnull(y2020_mar,0)  as y2020_mar  ,
+-- MAGIC ifnull(y2020_apr,0)  as y2020_apr  ,
+-- MAGIC ifnull(y2020_may,0)  as y2020_may  ,
+-- MAGIC ifnull(y2020_jun,0)  as y2020_jun  ,
+-- MAGIC ifnull(y2020_jul,0)  as y2020_jul  ,
+-- MAGIC ifnull(y2020_aug,0)  as y2020_aug  ,
+-- MAGIC ifnull(y2020_sep,0)  as y2020_sep  ,
+-- MAGIC ifnull(y2020_oct,0)  as y2020_oct  ,
+-- MAGIC ifnull(y2020_nov,0)  as y2020_nov  ,
+-- MAGIC ifnull(y2020_dec,0)  as y2020_dec  ,
+-- MAGIC ifnull(y2021_jan,0)  as y2021_jan  ,
+-- MAGIC ifnull(y2021_feb,0)  as y2021_feb  ,
+-- MAGIC ifnull(y2021_mar,0)  as y2021_mar  ,
+-- MAGIC ifnull(y2021_apr,0)  as y2021_apr  ,
+-- MAGIC ifnull(y2021_may,0)  as y2021_may  ,
+-- MAGIC ifnull(y2021_jun,0)  as y2021_jun  ,
+-- MAGIC ifnull(y2021_jul,0)  as y2021_jul  ,
+-- MAGIC ifnull(y2021_aug,0)  as y2021_aug  ,
+-- MAGIC ifnull(y2021_sep,0)  as y2021_sep  ,
+-- MAGIC ifnull(y2021_oct,0)  as y2021_oct  ,
+-- MAGIC ifnull(y2021_nov,0)  as y2021_nov  ,
+-- MAGIC ifnull(y2021_dec,0)  as y2021_dec  ,
+-- MAGIC ifnull(y2022_jan,0)  as y2022_jan  ,
+-- MAGIC ifnull(y2022_feb,0)  as y2022_feb  ,
+-- MAGIC ifnull(y2022_mar,0)  as y2022_mar  ,
+-- MAGIC ifnull(y2022_apr,0)  as y2022_apr  ,
+-- MAGIC ifnull(y2022_may,0)  as y2022_may  ,
+-- MAGIC ifnull(y2022_jun,0)  as y2022_jun  ,
+-- MAGIC ifnull(y2022_jul,0)  as y2022_jul  ,
+-- MAGIC ifnull(y2022_aug,0)  as y2022_aug  ,
+-- MAGIC ifnull(y2022_sep,0)  as y2022_sep  ,
+-- MAGIC ifnull(y2022_oct,0)  as y2022_oct  ,
+-- MAGIC ifnull(y2022_nov,0)  as y2022_nov  ,
+-- MAGIC ifnull(y2022_dec,0)  as y2022_dec
+-- MAGIC ,y2000_jan+
+-- MAGIC y2000_feb+
+-- MAGIC y2000_mar+
+-- MAGIC y2000_apr+
+-- MAGIC y2000_may+
+-- MAGIC y2000_jun+
+-- MAGIC y2000_jul+
+-- MAGIC y2000_aug+
+-- MAGIC y2000_sep+
+-- MAGIC y2000_oct+
+-- MAGIC y2000_nov+
+-- MAGIC y2000_dec+
+-- MAGIC y2001_jan+
+-- MAGIC y2001_feb+
+-- MAGIC y2001_mar+
+-- MAGIC y2001_apr+
+-- MAGIC y2001_may+
+-- MAGIC y2001_jun+
+-- MAGIC y2001_jul+
+-- MAGIC y2001_aug+
+-- MAGIC y2001_sep+
+-- MAGIC y2001_oct+
+-- MAGIC y2001_nov+
+-- MAGIC y2001_dec+
+-- MAGIC y2002_jan+
+-- MAGIC y2002_feb+
+-- MAGIC y2002_mar+
+-- MAGIC y2002_apr+
+-- MAGIC y2002_may+
+-- MAGIC y2002_jun+
+-- MAGIC y2002_jul+
+-- MAGIC y2002_aug+
+-- MAGIC y2002_sep+
+-- MAGIC y2002_oct+
+-- MAGIC y2002_nov+
+-- MAGIC y2002_dec+
+-- MAGIC y2003_jan+
+-- MAGIC y2003_feb+
+-- MAGIC y2003_mar+
+-- MAGIC y2003_apr+
+-- MAGIC y2003_may+
+-- MAGIC y2003_jun+
+-- MAGIC y2003_jul+
+-- MAGIC y2003_aug+
+-- MAGIC y2003_sep+
+-- MAGIC y2003_oct+
+-- MAGIC y2003_nov+
+-- MAGIC y2003_dec+
+-- MAGIC y2004_jan+
+-- MAGIC y2004_feb+
+-- MAGIC y2004_mar+
+-- MAGIC y2004_apr+
+-- MAGIC y2004_may+
+-- MAGIC y2004_jun+
+-- MAGIC y2004_jul+
+-- MAGIC y2004_aug+
+-- MAGIC y2004_sep+
+-- MAGIC y2004_oct+
+-- MAGIC y2004_nov+
+-- MAGIC y2004_dec+
+-- MAGIC y2005_jan+
+-- MAGIC y2005_feb+
+-- MAGIC y2005_mar+
+-- MAGIC y2005_apr+
+-- MAGIC y2005_may+
+-- MAGIC y2005_jun+
+-- MAGIC y2005_jul+
+-- MAGIC y2005_aug+
+-- MAGIC y2005_sep+
+-- MAGIC y2005_oct+
+-- MAGIC y2005_nov+
+-- MAGIC y2005_dec+
+-- MAGIC y2006_jan+
+-- MAGIC y2006_feb+
+-- MAGIC y2006_mar+
+-- MAGIC y2006_apr+
+-- MAGIC y2006_may+
+-- MAGIC y2006_jun+
+-- MAGIC y2006_jul+
+-- MAGIC y2006_aug+
+-- MAGIC y2006_sep+
+-- MAGIC y2006_oct+
+-- MAGIC y2006_nov+
+-- MAGIC y2006_dec+
+-- MAGIC y2007_jan+
+-- MAGIC y2007_feb+
+-- MAGIC y2007_mar+
+-- MAGIC y2007_apr+
+-- MAGIC y2007_may+
+-- MAGIC y2007_jun+
+-- MAGIC y2007_jul+
+-- MAGIC y2007_aug+
+-- MAGIC y2007_sep+
+-- MAGIC y2007_oct+
+-- MAGIC y2007_nov+
+-- MAGIC y2007_dec+
+-- MAGIC y2008_jan+
+-- MAGIC y2008_feb+
+-- MAGIC y2008_mar+
+-- MAGIC y2008_apr+
+-- MAGIC y2008_may+
+-- MAGIC y2008_jun+
+-- MAGIC y2008_jul+
+-- MAGIC y2008_aug+
+-- MAGIC y2008_sep+
+-- MAGIC y2008_oct+
+-- MAGIC y2008_nov+
+-- MAGIC y2008_dec+
+-- MAGIC y2009_jan+
+-- MAGIC y2009_feb+
+-- MAGIC y2009_mar+
+-- MAGIC y2009_apr+
+-- MAGIC y2009_may+
+-- MAGIC y2009_jun+
+-- MAGIC y2009_jul+
+-- MAGIC y2009_aug+
+-- MAGIC y2009_sep+
+-- MAGIC y2009_oct+
+-- MAGIC y2009_nov+
+-- MAGIC y2009_dec+
+-- MAGIC y2010_jan+
+-- MAGIC y2010_feb+
+-- MAGIC y2010_mar+
+-- MAGIC y2010_apr+
+-- MAGIC y2010_may+
+-- MAGIC y2010_jun+
+-- MAGIC y2010_jul+
+-- MAGIC y2010_aug+
+-- MAGIC y2010_sep+
+-- MAGIC y2010_oct+
+-- MAGIC y2010_nov+
+-- MAGIC y2010_dec+
+-- MAGIC y2011_jan+
+-- MAGIC y2011_feb+
+-- MAGIC y2011_mar+
+-- MAGIC y2011_apr+
+-- MAGIC y2011_may+
+-- MAGIC y2011_jun+
+-- MAGIC y2011_jul+
+-- MAGIC y2011_aug+
+-- MAGIC y2011_sep+
+-- MAGIC y2011_oct+
+-- MAGIC y2011_nov+
+-- MAGIC y2011_dec+
+-- MAGIC y2012_jan+
+-- MAGIC y2012_feb+
+-- MAGIC y2012_mar+
+-- MAGIC y2012_apr+
+-- MAGIC y2012_may+
+-- MAGIC y2012_jun+
+-- MAGIC y2012_jul+
+-- MAGIC y2012_aug+
+-- MAGIC y2012_sep+
+-- MAGIC y2012_oct+
+-- MAGIC y2012_nov+
+-- MAGIC y2012_dec+
+-- MAGIC y2013_jan+
+-- MAGIC y2013_feb+
+-- MAGIC y2013_mar+
+-- MAGIC y2013_apr+
+-- MAGIC y2013_may+
+-- MAGIC y2013_jun+
+-- MAGIC y2013_jul+
+-- MAGIC y2013_aug+
+-- MAGIC y2013_sep+
+-- MAGIC y2013_oct+
+-- MAGIC y2013_nov+
+-- MAGIC y2013_dec+
+-- MAGIC y2014_jan+
+-- MAGIC y2014_feb+
+-- MAGIC y2014_mar+
+-- MAGIC y2014_apr+
+-- MAGIC y2014_may+
+-- MAGIC y2014_jun+
+-- MAGIC y2014_jul+
+-- MAGIC y2014_aug+
+-- MAGIC y2014_sep+
+-- MAGIC y2014_oct+
+-- MAGIC y2014_nov+
+-- MAGIC y2014_dec+
+-- MAGIC y2015_jan+
+-- MAGIC y2015_feb+
+-- MAGIC y2015_mar+
+-- MAGIC y2015_apr+
+-- MAGIC y2015_may+
+-- MAGIC y2015_jun+
+-- MAGIC y2015_jul+
+-- MAGIC y2015_aug+
+-- MAGIC y2015_sep+
+-- MAGIC y2015_oct+
+-- MAGIC y2015_nov+
+-- MAGIC y2015_dec+
+-- MAGIC y2016_jan+
+-- MAGIC y2016_feb+
+-- MAGIC y2016_mar+
+-- MAGIC y2016_apr+
+-- MAGIC y2016_may+
+-- MAGIC y2016_jun+
+-- MAGIC y2016_jul+
+-- MAGIC y2016_aug+
+-- MAGIC y2016_sep+
+-- MAGIC y2016_oct+
+-- MAGIC y2016_nov+
+-- MAGIC y2016_dec+
+-- MAGIC y2017_jan+
+-- MAGIC y2017_feb+
+-- MAGIC y2017_mar+
+-- MAGIC y2017_apr+
+-- MAGIC y2017_may+
+-- MAGIC y2017_jun+
+-- MAGIC y2017_jul+
+-- MAGIC y2017_aug+
+-- MAGIC y2017_sep+
+-- MAGIC y2017_oct+
+-- MAGIC y2017_nov+
+-- MAGIC y2017_dec+
+-- MAGIC y2018_jan+
+-- MAGIC y2018_feb+
+-- MAGIC y2018_mar+
+-- MAGIC y2018_apr+
+-- MAGIC y2018_may+
+-- MAGIC y2018_jun+
+-- MAGIC y2018_jul+
+-- MAGIC y2018_aug+
+-- MAGIC y2018_sep+
+-- MAGIC y2018_oct+
+-- MAGIC y2018_nov+
+-- MAGIC y2018_dec+
+-- MAGIC y2019_jan+
+-- MAGIC y2019_feb+
+-- MAGIC y2019_mar+
+-- MAGIC y2019_apr+
+-- MAGIC y2019_may+
+-- MAGIC y2019_jun+
+-- MAGIC y2019_jul+
+-- MAGIC y2019_aug+
+-- MAGIC y2019_sep+
+-- MAGIC y2019_oct+
+-- MAGIC y2019_nov+
+-- MAGIC y2019_dec+
+-- MAGIC y2020_jan+
+-- MAGIC y2020_feb+
+-- MAGIC y2020_mar+
+-- MAGIC y2020_apr+
+-- MAGIC y2020_may+
+-- MAGIC y2020_jun+
+-- MAGIC y2020_jul+
+-- MAGIC y2020_aug+
+-- MAGIC y2020_sep+
+-- MAGIC y2020_oct+
+-- MAGIC y2020_nov+
+-- MAGIC y2020_dec+
+-- MAGIC y2021_jan+
+-- MAGIC y2021_feb+
+-- MAGIC y2021_mar+
+-- MAGIC y2021_apr+
+-- MAGIC y2021_may+
+-- MAGIC y2021_jun+
+-- MAGIC y2021_jul+
+-- MAGIC y2021_aug+
+-- MAGIC y2021_sep+
+-- MAGIC y2021_oct+
+-- MAGIC y2021_nov+
+-- MAGIC y2021_dec+
+-- MAGIC y2022_jan+
+-- MAGIC y2022_feb+
+-- MAGIC y2022_mar+
+-- MAGIC y2022_apr+
+-- MAGIC y2022_may+
+-- MAGIC y2022_jun+
+-- MAGIC y2022_jul+
+-- MAGIC y2022_aug+
+-- MAGIC y2022_sep+
+-- MAGIC y2022_oct+
+-- MAGIC y2022_nov+
+-- MAGIC y2022_dec as fire_total
+-- MAGIC
+-- MAGIC  
+-- MAGIC    
+-- MAGIC  FROM fire_month_year 
+-- MAGIC   LEFT JOIN PA2022      ON fire_month_year.GridNum = PA2022.gridnum
+-- MAGIC   ---LEFT JOIN maes_sq1    ON fire_month_year.GridNum = maes_sq1.GridNum
+-- MAGIC   LEFT JOIN EnvZones    ON fire_month_year.GridNum = EnvZones.GridNum
+-- MAGIC   LEFT JOIN lcf_0018    ON fire_month_year.GridNum = lcf_0018.GridNum
+-- MAGIC   LEFT JOIN nuts3_2021  ON fire_month_year.GridNum = nuts3_2021.GridNum  
+-- MAGIC
+-- MAGIC
+-- MAGIC
+-- MAGIC   where nuts3_2021.ADM_ID >=0 AND
+-- MAGIC
+-- MAGIC   (y2000_jan+
+-- MAGIC y2000_feb+
+-- MAGIC y2000_mar+
+-- MAGIC y2000_apr+
+-- MAGIC y2000_may+
+-- MAGIC y2000_jun+
+-- MAGIC y2000_jul+
+-- MAGIC y2000_aug+
+-- MAGIC y2000_sep+
+-- MAGIC y2000_oct+
+-- MAGIC y2000_nov+
+-- MAGIC y2000_dec+
+-- MAGIC y2001_jan+
+-- MAGIC y2001_feb+
+-- MAGIC y2001_mar+
+-- MAGIC y2001_apr+
+-- MAGIC y2001_may+
+-- MAGIC y2001_jun+
+-- MAGIC y2001_jul+
+-- MAGIC y2001_aug+
+-- MAGIC y2001_sep+
+-- MAGIC y2001_oct+
+-- MAGIC y2001_nov+
+-- MAGIC y2001_dec+
+-- MAGIC y2002_jan+
+-- MAGIC y2002_feb+
+-- MAGIC y2002_mar+
+-- MAGIC y2002_apr+
+-- MAGIC y2002_may+
+-- MAGIC y2002_jun+
+-- MAGIC y2002_jul+
+-- MAGIC y2002_aug+
+-- MAGIC y2002_sep+
+-- MAGIC y2002_oct+
+-- MAGIC y2002_nov+
+-- MAGIC y2002_dec+
+-- MAGIC y2003_jan+
+-- MAGIC y2003_feb+
+-- MAGIC y2003_mar+
+-- MAGIC y2003_apr+
+-- MAGIC y2003_may+
+-- MAGIC y2003_jun+
+-- MAGIC y2003_jul+
+-- MAGIC y2003_aug+
+-- MAGIC y2003_sep+
+-- MAGIC y2003_oct+
+-- MAGIC y2003_nov+
+-- MAGIC y2003_dec+
+-- MAGIC y2004_jan+
+-- MAGIC y2004_feb+
+-- MAGIC y2004_mar+
+-- MAGIC y2004_apr+
+-- MAGIC y2004_may+
+-- MAGIC y2004_jun+
+-- MAGIC y2004_jul+
+-- MAGIC y2004_aug+
+-- MAGIC y2004_sep+
+-- MAGIC y2004_oct+
+-- MAGIC y2004_nov+
+-- MAGIC y2004_dec+
+-- MAGIC y2005_jan+
+-- MAGIC y2005_feb+
+-- MAGIC y2005_mar+
+-- MAGIC y2005_apr+
+-- MAGIC y2005_may+
+-- MAGIC y2005_jun+
+-- MAGIC y2005_jul+
+-- MAGIC y2005_aug+
+-- MAGIC y2005_sep+
+-- MAGIC y2005_oct+
+-- MAGIC y2005_nov+
+-- MAGIC y2005_dec+
+-- MAGIC y2006_jan+
+-- MAGIC y2006_feb+
+-- MAGIC y2006_mar+
+-- MAGIC y2006_apr+
+-- MAGIC y2006_may+
+-- MAGIC y2006_jun+
+-- MAGIC y2006_jul+
+-- MAGIC y2006_aug+
+-- MAGIC y2006_sep+
+-- MAGIC y2006_oct+
+-- MAGIC y2006_nov+
+-- MAGIC y2006_dec+
+-- MAGIC y2007_jan+
+-- MAGIC y2007_feb+
+-- MAGIC y2007_mar+
+-- MAGIC y2007_apr+
+-- MAGIC y2007_may+
+-- MAGIC y2007_jun+
+-- MAGIC y2007_jul+
+-- MAGIC y2007_aug+
+-- MAGIC y2007_sep+
+-- MAGIC y2007_oct+
+-- MAGIC y2007_nov+
+-- MAGIC y2007_dec+
+-- MAGIC y2008_jan+
+-- MAGIC y2008_feb+
+-- MAGIC y2008_mar+
+-- MAGIC y2008_apr+
+-- MAGIC y2008_may+
+-- MAGIC y2008_jun+
+-- MAGIC y2008_jul+
+-- MAGIC y2008_aug+
+-- MAGIC y2008_sep+
+-- MAGIC y2008_oct+
+-- MAGIC y2008_nov+
+-- MAGIC y2008_dec+
+-- MAGIC y2009_jan+
+-- MAGIC y2009_feb+
+-- MAGIC y2009_mar+
+-- MAGIC y2009_apr+
+-- MAGIC y2009_may+
+-- MAGIC y2009_jun+
+-- MAGIC y2009_jul+
+-- MAGIC y2009_aug+
+-- MAGIC y2009_sep+
+-- MAGIC y2009_oct+
+-- MAGIC y2009_nov+
+-- MAGIC y2009_dec+
+-- MAGIC y2010_jan+
+-- MAGIC y2010_feb+
+-- MAGIC y2010_mar+
+-- MAGIC y2010_apr+
+-- MAGIC y2010_may+
+-- MAGIC y2010_jun+
+-- MAGIC y2010_jul+
+-- MAGIC y2010_aug+
+-- MAGIC y2010_sep+
+-- MAGIC y2010_oct+
+-- MAGIC y2010_nov+
+-- MAGIC y2010_dec+
+-- MAGIC y2011_jan+
+-- MAGIC y2011_feb+
+-- MAGIC y2011_mar+
+-- MAGIC y2011_apr+
+-- MAGIC y2011_may+
+-- MAGIC y2011_jun+
+-- MAGIC y2011_jul+
+-- MAGIC y2011_aug+
+-- MAGIC y2011_sep+
+-- MAGIC y2011_oct+
+-- MAGIC y2011_nov+
+-- MAGIC y2011_dec+
+-- MAGIC y2012_jan+
+-- MAGIC y2012_feb+
+-- MAGIC y2012_mar+
+-- MAGIC y2012_apr+
+-- MAGIC y2012_may+
+-- MAGIC y2012_jun+
+-- MAGIC y2012_jul+
+-- MAGIC y2012_aug+
+-- MAGIC y2012_sep+
+-- MAGIC y2012_oct+
+-- MAGIC y2012_nov+
+-- MAGIC y2012_dec+
+-- MAGIC y2013_jan+
+-- MAGIC y2013_feb+
+-- MAGIC y2013_mar+
+-- MAGIC y2013_apr+
+-- MAGIC y2013_may+
+-- MAGIC y2013_jun+
+-- MAGIC y2013_jul+
+-- MAGIC y2013_aug+
+-- MAGIC y2013_sep+
+-- MAGIC y2013_oct+
+-- MAGIC y2013_nov+
+-- MAGIC y2013_dec+
+-- MAGIC y2014_jan+
+-- MAGIC y2014_feb+
+-- MAGIC y2014_mar+
+-- MAGIC y2014_apr+
+-- MAGIC y2014_may+
+-- MAGIC y2014_jun+
+-- MAGIC y2014_jul+
+-- MAGIC y2014_aug+
+-- MAGIC y2014_sep+
+-- MAGIC y2014_oct+
+-- MAGIC y2014_nov+
+-- MAGIC y2014_dec+
+-- MAGIC y2015_jan+
+-- MAGIC y2015_feb+
+-- MAGIC y2015_mar+
+-- MAGIC y2015_apr+
+-- MAGIC y2015_may+
+-- MAGIC y2015_jun+
+-- MAGIC y2015_jul+
+-- MAGIC y2015_aug+
+-- MAGIC y2015_sep+
+-- MAGIC y2015_oct+
+-- MAGIC y2015_nov+
+-- MAGIC y2015_dec+
+-- MAGIC y2016_jan+
+-- MAGIC y2016_feb+
+-- MAGIC y2016_mar+
+-- MAGIC y2016_apr+
+-- MAGIC y2016_may+
+-- MAGIC y2016_jun+
+-- MAGIC y2016_jul+
+-- MAGIC y2016_aug+
+-- MAGIC y2016_sep+
+-- MAGIC y2016_oct+
+-- MAGIC y2016_nov+
+-- MAGIC y2016_dec+
+-- MAGIC y2017_jan+
+-- MAGIC y2017_feb+
+-- MAGIC y2017_mar+
+-- MAGIC y2017_apr+
+-- MAGIC y2017_may+
+-- MAGIC y2017_jun+
+-- MAGIC y2017_jul+
+-- MAGIC y2017_aug+
+-- MAGIC y2017_sep+
+-- MAGIC y2017_oct+
+-- MAGIC y2017_nov+
+-- MAGIC y2017_dec+
+-- MAGIC y2018_jan+
+-- MAGIC y2018_feb+
+-- MAGIC y2018_mar+
+-- MAGIC y2018_apr+
+-- MAGIC y2018_may+
+-- MAGIC y2018_jun+
+-- MAGIC y2018_jul+
+-- MAGIC y2018_aug+
+-- MAGIC y2018_sep+
+-- MAGIC y2018_oct+
+-- MAGIC y2018_nov+
+-- MAGIC y2018_dec+
+-- MAGIC y2019_jan+
+-- MAGIC y2019_feb+
+-- MAGIC y2019_mar+
+-- MAGIC y2019_apr+
+-- MAGIC y2019_may+
+-- MAGIC y2019_jun+
+-- MAGIC y2019_jul+
+-- MAGIC y2019_aug+
+-- MAGIC y2019_sep+
+-- MAGIC y2019_oct+
+-- MAGIC y2019_nov+
+-- MAGIC y2019_dec+
+-- MAGIC y2020_jan+
+-- MAGIC y2020_feb+
+-- MAGIC y2020_mar+
+-- MAGIC y2020_apr+
+-- MAGIC y2020_may+
+-- MAGIC y2020_jun+
+-- MAGIC y2020_jul+
+-- MAGIC y2020_aug+
+-- MAGIC y2020_sep+
+-- MAGIC y2020_oct+
+-- MAGIC y2020_nov+
+-- MAGIC y2020_dec+
+-- MAGIC y2021_jan+
+-- MAGIC y2021_feb+
+-- MAGIC y2021_mar+
+-- MAGIC y2021_apr+
+-- MAGIC y2021_may+
+-- MAGIC y2021_jun+
+-- MAGIC y2021_jul+
+-- MAGIC y2021_aug+
+-- MAGIC y2021_sep+
+-- MAGIC y2021_oct+
+-- MAGIC y2021_nov+
+-- MAGIC y2021_dec+
+-- MAGIC y2022_jan+
+-- MAGIC y2022_feb+
+-- MAGIC y2022_mar+
+-- MAGIC y2022_apr+
+-- MAGIC y2022_may+
+-- MAGIC y2022_jun+
+-- MAGIC y2022_jul+
+-- MAGIC y2022_aug+
+-- MAGIC y2022_sep+
+-- MAGIC y2022_oct+
+-- MAGIC y2022_nov+
+-- MAGIC y2022_dec  >0)
+-- MAGIC
+-- MAGIC
+-- MAGIC
+-- MAGIC   """)
+-- MAGIC   
+-- MAGIC   fire_c_table2.createOrReplaceTempView("fire_c_table2")
+
+-- COMMAND ----------
+
+-- MAGIC %scala
+-- MAGIC
+-- MAGIC
+-- MAGIC val fire_c_table = spark.sql(""" 
+-- MAGIC SELECT 
+-- MAGIC
+-- MAGIC       nuts3_2021.GridNum,
+-- MAGIC       nuts3_2021.GridNum & cast(-16777216 as bigint) as GridNum1km,
+-- MAGIC       nuts3_2021.GridNum10km,
+-- MAGIC       nuts3_2021.AreaHa,
+-- MAGIC       nuts3_2021.ADM_ID,
+-- MAGIC       nuts3_2021.ISO2,
+-- MAGIC       PA2022.ProtectedArea2022_10m AS PA2022_class,
+-- MAGIC    ---   maes_sq1.MAES_CODE,
+-- MAGIC       EnvZones.Text,
+-- MAGIC       lcf_0018.lcf3,
+-- MAGIC       lcf_0018.SCHANG,
+-- MAGIC       
+-- MAGIC ifnull(y2000_jan,0)  as y2000_jan  ,
+-- MAGIC ifnull(y2000_feb,0)  as y2000_feb  ,
+-- MAGIC ifnull(y2000_mar,0)  as y2000_mar  ,
+-- MAGIC ifnull(y2000_apr,0)  as y2000_apr  ,
+-- MAGIC ifnull(y2000_may,0)  as y2000_may  ,
+-- MAGIC ifnull(y2000_jun,0)  as y2000_jun  ,
+-- MAGIC ifnull(y2000_jul,0)  as y2000_jul  ,
+-- MAGIC ifnull(y2000_aug,0)  as y2000_aug  ,
+-- MAGIC ifnull(y2000_sep,0)  as y2000_sep  ,
+-- MAGIC ifnull(y2000_oct,0)  as y2000_oct  ,
+-- MAGIC ifnull(y2000_nov,0)  as y2000_nov  ,
+-- MAGIC ifnull(y2000_dec,0)  as y2000_dec  ,
+-- MAGIC
+-- MAGIC ifnull(y2001_jan,0)  as y2001_jan  ,
+-- MAGIC ifnull(y2001_feb,0)  as y2001_feb  ,
+-- MAGIC ifnull(y2001_mar,0)  as y2001_mar  ,
+-- MAGIC ifnull(y2001_apr,0)  as y2001_apr  ,
+-- MAGIC ifnull(y2001_may,0)  as y2001_may  ,
+-- MAGIC ifnull(y2001_jun,0)  as y2001_jun  ,
+-- MAGIC ifnull(y2001_jul,0)  as y2001_jul  ,
+-- MAGIC ifnull(y2001_aug,0)  as y2001_aug  ,
+-- MAGIC ifnull(y2001_sep,0)  as y2001_sep  ,
+-- MAGIC ifnull(y2001_oct,0)  as y2001_oct  ,
+-- MAGIC ifnull(y2001_nov,0)  as y2001_nov  ,
+-- MAGIC ifnull(y2001_dec,0)  as y2001_dec  ,
+-- MAGIC
+-- MAGIC ifnull(y2002_jan,0)  as y2002_jan  ,
+-- MAGIC ifnull(y2002_feb,0)  as y2002_feb  ,
+-- MAGIC ifnull(y2002_mar,0)  as y2002_mar  ,
+-- MAGIC ifnull(y2002_apr,0)  as y2002_apr  ,
+-- MAGIC ifnull(y2002_may,0)  as y2002_may  ,
+-- MAGIC ifnull(y2002_jun,0)  as y2002_jun  ,
+-- MAGIC ifnull(y2002_jul,0)  as y2002_jul  ,
+-- MAGIC ifnull(y2002_aug,0)  as y2002_aug  ,
+-- MAGIC ifnull(y2002_sep,0)  as y2002_sep  ,
+-- MAGIC ifnull(y2002_oct,0)  as y2002_oct  ,
+-- MAGIC ifnull(y2002_nov,0)  as y2002_nov  ,
+-- MAGIC ifnull(y2002_dec,0)  as y2002_dec  ,
+-- MAGIC
+-- MAGIC ifnull(y2003_jan,0)  as y2003_jan  ,
+-- MAGIC ifnull(y2003_feb,0)  as y2003_feb  ,
+-- MAGIC ifnull(y2003_mar,0)  as y2003_mar  ,
+-- MAGIC ifnull(y2003_apr,0)  as y2003_apr  ,
+-- MAGIC ifnull(y2003_may,0)  as y2003_may  ,
+-- MAGIC ifnull(y2003_jun,0)  as y2003_jun  ,
+-- MAGIC ifnull(y2003_jul,0)  as y2003_jul  ,
+-- MAGIC ifnull(y2003_aug,0)  as y2003_aug  ,
+-- MAGIC ifnull(y2003_sep,0)  as y2003_sep  ,
+-- MAGIC ifnull(y2003_oct,0)  as y2003_oct  ,
+-- MAGIC ifnull(y2003_nov,0)  as y2003_nov  ,
+-- MAGIC ifnull(y2003_dec,0)  as y2003_dec  ,
+-- MAGIC
+-- MAGIC ifnull(y2004_jan,0)  as y2004_jan  ,
+-- MAGIC ifnull(y2004_feb,0)  as y2004_feb  ,
+-- MAGIC ifnull(y2004_mar,0)  as y2004_mar  ,
+-- MAGIC ifnull(y2004_apr,0)  as y2004_apr  ,
+-- MAGIC ifnull(y2004_may,0)  as y2004_may  ,
+-- MAGIC ifnull(y2004_jun,0)  as y2004_jun  ,
+-- MAGIC ifnull(y2004_jul,0)  as y2004_jul  ,
+-- MAGIC ifnull(y2004_aug,0)  as y2004_aug  ,
+-- MAGIC ifnull(y2004_sep,0)  as y2004_sep  ,
+-- MAGIC ifnull(y2004_oct,0)  as y2004_oct  ,
+-- MAGIC ifnull(y2004_nov,0)  as y2004_nov  ,
+-- MAGIC ifnull(y2004_dec,0)  as y2004_dec  ,
+-- MAGIC
+-- MAGIC ifnull(y2005_jan,0)  as y2005_jan  ,
+-- MAGIC ifnull(y2005_feb,0)  as y2005_feb  ,
+-- MAGIC ifnull(y2005_mar,0)  as y2005_mar  ,
+-- MAGIC ifnull(y2005_apr,0)  as y2005_apr  ,
+-- MAGIC ifnull(y2005_may,0)  as y2005_may  ,
+-- MAGIC ifnull(y2005_jun,0)  as y2005_jun  ,
+-- MAGIC ifnull(y2005_jul,0)  as y2005_jul  ,
+-- MAGIC ifnull(y2005_aug,0)  as y2005_aug  ,
+-- MAGIC ifnull(y2005_sep,0)  as y2005_sep  ,
+-- MAGIC ifnull(y2005_oct,0)  as y2005_oct  ,
+-- MAGIC ifnull(y2005_nov,0)  as y2005_nov  ,
+-- MAGIC ifnull(y2005_dec,0)  as y2005_dec  ,
+-- MAGIC
+-- MAGIC ifnull(y2006_jan,0)  as y2006_jan  ,
+-- MAGIC ifnull(y2006_feb,0)  as y2006_feb  ,
+-- MAGIC ifnull(y2006_mar,0)  as y2006_mar  ,
+-- MAGIC ifnull(y2006_apr,0)  as y2006_apr  ,
+-- MAGIC ifnull(y2006_may,0)  as y2006_may  ,
+-- MAGIC ifnull(y2006_jun,0)  as y2006_jun  ,
+-- MAGIC ifnull(y2006_jul,0)  as y2006_jul  ,
+-- MAGIC ifnull(y2006_aug,0)  as y2006_aug  ,
+-- MAGIC ifnull(y2006_sep,0)  as y2006_sep  ,
+-- MAGIC ifnull(y2006_oct,0)  as y2006_oct  ,
+-- MAGIC ifnull(y2006_nov,0)  as y2006_nov  ,
+-- MAGIC ifnull(y2006_dec,0)  as y2006_dec  ,
+-- MAGIC ifnull(y2007_jan,0)  as y2007_jan  ,
+-- MAGIC ifnull(y2007_feb,0)  as y2007_feb  ,
+-- MAGIC ifnull(y2007_mar,0)  as y2007_mar  ,
+-- MAGIC ifnull(y2007_apr,0)  as y2007_apr  ,
+-- MAGIC ifnull(y2007_may,0)  as y2007_may  ,
+-- MAGIC ifnull(y2007_jun,0)  as y2007_jun  ,
+-- MAGIC ifnull(y2007_jul,0)  as y2007_jul  ,
+-- MAGIC ifnull(y2007_aug,0)  as y2007_aug  ,
+-- MAGIC ifnull(y2007_sep,0)  as y2007_sep  ,
+-- MAGIC ifnull(y2007_oct,0)  as y2007_oct  ,
+-- MAGIC ifnull(y2007_nov,0)  as y2007_nov  ,
+-- MAGIC ifnull(y2007_dec,0)  as y2007_dec  ,
+-- MAGIC ifnull(y2008_jan,0)  as y2008_jan  ,
+-- MAGIC ifnull(y2008_feb,0)  as y2008_feb  ,
+-- MAGIC ifnull(y2008_mar,0)  as y2008_mar  ,
+-- MAGIC ifnull(y2008_apr,0)  as y2008_apr  ,
+-- MAGIC ifnull(y2008_may,0)  as y2008_may  ,
+-- MAGIC ifnull(y2008_jun,0)  as y2008_jun  ,
+-- MAGIC ifnull(y2008_jul,0)  as y2008_jul  ,
+-- MAGIC ifnull(y2008_aug,0)  as y2008_aug  ,
+-- MAGIC ifnull(y2008_sep,0)  as y2008_sep  ,
+-- MAGIC ifnull(y2008_oct,0)  as y2008_oct  ,
+-- MAGIC ifnull(y2008_nov,0)  as y2008_nov  ,
+-- MAGIC ifnull(y2008_dec,0)  as y2008_dec  ,
+-- MAGIC ifnull(y2009_jan,0)  as y2009_jan  ,
+-- MAGIC ifnull(y2009_feb,0)  as y2009_feb  ,
+-- MAGIC ifnull(y2009_mar,0)  as y2009_mar  ,
+-- MAGIC ifnull(y2009_apr,0)  as y2009_apr  ,
+-- MAGIC ifnull(y2009_may,0)  as y2009_may  ,
+-- MAGIC ifnull(y2009_jun,0)  as y2009_jun  ,
+-- MAGIC ifnull(y2009_jul,0)  as y2009_jul  ,
+-- MAGIC ifnull(y2009_aug,0)  as y2009_aug  ,
+-- MAGIC ifnull(y2009_sep,0)  as y2009_sep  ,
+-- MAGIC ifnull(y2009_oct,0)  as y2009_oct  ,
+-- MAGIC ifnull(y2009_nov,0)  as y2009_nov  ,
+-- MAGIC ifnull(y2009_dec,0)  as y2009_dec  ,
+-- MAGIC ifnull(y2010_jan,0)  as y2010_jan  ,
+-- MAGIC ifnull(y2010_feb,0)  as y2010_feb  ,
+-- MAGIC ifnull(y2010_mar,0)  as y2010_mar  ,
+-- MAGIC ifnull(y2010_apr,0)  as y2010_apr  ,
+-- MAGIC ifnull(y2010_may,0)  as y2010_may  ,
+-- MAGIC ifnull(y2010_jun,0)  as y2010_jun  ,
+-- MAGIC ifnull(y2010_jul,0)  as y2010_jul  ,
+-- MAGIC ifnull(y2010_aug,0)  as y2010_aug  ,
+-- MAGIC ifnull(y2010_sep,0)  as y2010_sep  ,
+-- MAGIC ifnull(y2010_oct,0)  as y2010_oct  ,
+-- MAGIC ifnull(y2010_nov,0)  as y2010_nov  ,
+-- MAGIC ifnull(y2010_dec,0)  as y2010_dec  ,
+-- MAGIC ifnull(y2011_jan,0)  as y2011_jan  ,
+-- MAGIC ifnull(y2011_feb,0)  as y2011_feb  ,
+-- MAGIC ifnull(y2011_mar,0)  as y2011_mar  ,
+-- MAGIC ifnull(y2011_apr,0)  as y2011_apr  ,
+-- MAGIC ifnull(y2011_may,0)  as y2011_may  ,
+-- MAGIC ifnull(y2011_jun,0)  as y2011_jun  ,
+-- MAGIC ifnull(y2011_jul,0)  as y2011_jul  ,
+-- MAGIC ifnull(y2011_aug,0)  as y2011_aug  ,
+-- MAGIC ifnull(y2011_sep,0)  as y2011_sep  ,
+-- MAGIC ifnull(y2011_oct,0)  as y2011_oct  ,
+-- MAGIC ifnull(y2011_nov,0)  as y2011_nov  ,
+-- MAGIC ifnull(y2011_dec,0)  as y2011_dec  ,
+-- MAGIC ifnull(y2012_jan,0)  as y2012_jan  ,
+-- MAGIC ifnull(y2012_feb,0)  as y2012_feb  ,
+-- MAGIC ifnull(y2012_mar,0)  as y2012_mar  ,
+-- MAGIC ifnull(y2012_apr,0)  as y2012_apr  ,
+-- MAGIC ifnull(y2012_may,0)  as y2012_may  ,
+-- MAGIC ifnull(y2012_jun,0)  as y2012_jun  ,
+-- MAGIC ifnull(y2012_jul,0)  as y2012_jul  ,
+-- MAGIC ifnull(y2012_aug,0)  as y2012_aug  ,
+-- MAGIC ifnull(y2012_sep,0)  as y2012_sep  ,
+-- MAGIC ifnull(y2012_oct,0)  as y2012_oct  ,
+-- MAGIC ifnull(y2012_nov,0)  as y2012_nov  ,
+-- MAGIC ifnull(y2012_dec,0)  as y2012_dec  ,
+-- MAGIC ifnull(y2013_jan,0)  as y2013_jan  ,
+-- MAGIC ifnull(y2013_feb,0)  as y2013_feb  ,
+-- MAGIC ifnull(y2013_mar,0)  as y2013_mar  ,
+-- MAGIC ifnull(y2013_apr,0)  as y2013_apr  ,
+-- MAGIC ifnull(y2013_may,0)  as y2013_may  ,
+-- MAGIC ifnull(y2013_jun,0)  as y2013_jun  ,
+-- MAGIC ifnull(y2013_jul,0)  as y2013_jul  ,
+-- MAGIC ifnull(y2013_aug,0)  as y2013_aug  ,
+-- MAGIC ifnull(y2013_sep,0)  as y2013_sep  ,
+-- MAGIC ifnull(y2013_oct,0)  as y2013_oct  ,
+-- MAGIC ifnull(y2013_nov,0)  as y2013_nov  ,
+-- MAGIC ifnull(y2013_dec,0)  as y2013_dec  ,
+-- MAGIC ifnull(y2014_jan,0)  as y2014_jan  ,
+-- MAGIC ifnull(y2014_feb,0)  as y2014_feb  ,
+-- MAGIC ifnull(y2014_mar,0)  as y2014_mar  ,
+-- MAGIC ifnull(y2014_apr,0)  as y2014_apr  ,
+-- MAGIC ifnull(y2014_may,0)  as y2014_may  ,
+-- MAGIC ifnull(y2014_jun,0)  as y2014_jun  ,
+-- MAGIC ifnull(y2014_jul,0)  as y2014_jul  ,
+-- MAGIC ifnull(y2014_aug,0)  as y2014_aug  ,
+-- MAGIC ifnull(y2014_sep,0)  as y2014_sep  ,
+-- MAGIC ifnull(y2014_oct,0)  as y2014_oct  ,
+-- MAGIC ifnull(y2014_nov,0)  as y2014_nov  ,
+-- MAGIC ifnull(y2014_dec,0)  as y2014_dec  ,
+-- MAGIC ifnull(y2015_jan,0)  as y2015_jan  ,
+-- MAGIC ifnull(y2015_feb,0)  as y2015_feb  ,
+-- MAGIC ifnull(y2015_mar,0)  as y2015_mar  ,
+-- MAGIC ifnull(y2015_apr,0)  as y2015_apr  ,
+-- MAGIC ifnull(y2015_may,0)  as y2015_may  ,
+-- MAGIC ifnull(y2015_jun,0)  as y2015_jun  ,
+-- MAGIC ifnull(y2015_jul,0)  as y2015_jul  ,
+-- MAGIC ifnull(y2015_aug,0)  as y2015_aug  ,
+-- MAGIC ifnull(y2015_sep,0)  as y2015_sep  ,
+-- MAGIC ifnull(y2015_oct,0)  as y2015_oct  ,
+-- MAGIC ifnull(y2015_nov,0)  as y2015_nov  ,
+-- MAGIC ifnull(y2015_dec,0)  as y2015_dec  ,
+-- MAGIC ifnull(y2016_jan,0)  as y2016_jan  ,
+-- MAGIC ifnull(y2016_feb,0)  as y2016_feb  ,
+-- MAGIC ifnull(y2016_mar,0)  as y2016_mar  ,
+-- MAGIC ifnull(y2016_apr,0)  as y2016_apr  ,
+-- MAGIC ifnull(y2016_may,0)  as y2016_may  ,
+-- MAGIC ifnull(y2016_jun,0)  as y2016_jun  ,
+-- MAGIC ifnull(y2016_jul,0)  as y2016_jul  ,
+-- MAGIC ifnull(y2016_aug,0)  as y2016_aug  ,
+-- MAGIC ifnull(y2016_sep,0)  as y2016_sep  ,
+-- MAGIC ifnull(y2016_oct,0)  as y2016_oct  ,
+-- MAGIC ifnull(y2016_nov,0)  as y2016_nov  ,
+-- MAGIC ifnull(y2016_dec,0)  as y2016_dec  ,
+-- MAGIC ifnull(y2017_jan,0)  as y2017_jan  ,
+-- MAGIC ifnull(y2017_feb,0)  as y2017_feb  ,
+-- MAGIC ifnull(y2017_mar,0)  as y2017_mar  ,
+-- MAGIC ifnull(y2017_apr,0)  as y2017_apr  ,
+-- MAGIC ifnull(y2017_may,0)  as y2017_may  ,
+-- MAGIC ifnull(y2017_jun,0)  as y2017_jun  ,
+-- MAGIC ifnull(y2017_jul,0)  as y2017_jul  ,
+-- MAGIC ifnull(y2017_aug,0)  as y2017_aug  ,
+-- MAGIC ifnull(y2017_sep,0)  as y2017_sep  ,
+-- MAGIC ifnull(y2017_oct,0)  as y2017_oct  ,
+-- MAGIC ifnull(y2017_nov,0)  as y2017_nov  ,
+-- MAGIC ifnull(y2017_dec,0)  as y2017_dec  ,
+-- MAGIC ifnull(y2018_jan,0)  as y2018_jan  ,
+-- MAGIC ifnull(y2018_feb,0)  as y2018_feb  ,
+-- MAGIC ifnull(y2018_mar,0)  as y2018_mar  ,
+-- MAGIC ifnull(y2018_apr,0)  as y2018_apr  ,
+-- MAGIC ifnull(y2018_may,0)  as y2018_may  ,
+-- MAGIC ifnull(y2018_jun,0)  as y2018_jun  ,
+-- MAGIC ifnull(y2018_jul,0)  as y2018_jul  ,
+-- MAGIC ifnull(y2018_aug,0)  as y2018_aug  ,
+-- MAGIC ifnull(y2018_sep,0)  as y2018_sep  ,
+-- MAGIC ifnull(y2018_oct,0)  as y2018_oct  ,
+-- MAGIC ifnull(y2018_nov,0)  as y2018_nov  ,
+-- MAGIC ifnull(y2018_dec,0)  as y2018_dec  ,
+-- MAGIC ifnull(y2019_jan,0)  as y2019_jan  ,
+-- MAGIC ifnull(y2019_feb,0)  as y2019_feb  ,
+-- MAGIC ifnull(y2019_mar,0)  as y2019_mar  ,
+-- MAGIC ifnull(y2019_apr,0)  as y2019_apr  ,
+-- MAGIC ifnull(y2019_may,0)  as y2019_may  ,
+-- MAGIC ifnull(y2019_jun,0)  as y2019_jun  ,
+-- MAGIC ifnull(y2019_jul,0)  as y2019_jul  ,
+-- MAGIC ifnull(y2019_aug,0)  as y2019_aug  ,
+-- MAGIC ifnull(y2019_sep,0)  as y2019_sep  ,
+-- MAGIC ifnull(y2019_oct,0)  as y2019_oct  ,
+-- MAGIC ifnull(y2019_nov,0)  as y2019_nov  ,
+-- MAGIC ifnull(y2019_dec,0)  as y2019_dec  ,
+-- MAGIC ifnull(y2020_jan,0)  as y2020_jan  ,
+-- MAGIC ifnull(y2020_feb,0)  as y2020_feb  ,
+-- MAGIC ifnull(y2020_mar,0)  as y2020_mar  ,
+-- MAGIC ifnull(y2020_apr,0)  as y2020_apr  ,
+-- MAGIC ifnull(y2020_may,0)  as y2020_may  ,
+-- MAGIC ifnull(y2020_jun,0)  as y2020_jun  ,
+-- MAGIC ifnull(y2020_jul,0)  as y2020_jul  ,
+-- MAGIC ifnull(y2020_aug,0)  as y2020_aug  ,
+-- MAGIC ifnull(y2020_sep,0)  as y2020_sep  ,
+-- MAGIC ifnull(y2020_oct,0)  as y2020_oct  ,
+-- MAGIC ifnull(y2020_nov,0)  as y2020_nov  ,
+-- MAGIC ifnull(y2020_dec,0)  as y2020_dec  ,
+-- MAGIC ifnull(y2021_jan,0)  as y2021_jan  ,
+-- MAGIC ifnull(y2021_feb,0)  as y2021_feb  ,
+-- MAGIC ifnull(y2021_mar,0)  as y2021_mar  ,
+-- MAGIC ifnull(y2021_apr,0)  as y2021_apr  ,
+-- MAGIC ifnull(y2021_may,0)  as y2021_may  ,
+-- MAGIC ifnull(y2021_jun,0)  as y2021_jun  ,
+-- MAGIC ifnull(y2021_jul,0)  as y2021_jul  ,
+-- MAGIC ifnull(y2021_aug,0)  as y2021_aug  ,
+-- MAGIC ifnull(y2021_sep,0)  as y2021_sep  ,
+-- MAGIC ifnull(y2021_oct,0)  as y2021_oct  ,
+-- MAGIC ifnull(y2021_nov,0)  as y2021_nov  ,
+-- MAGIC ifnull(y2021_dec,0)  as y2021_dec  ,
+-- MAGIC ifnull(y2022_jan,0)  as y2022_jan  ,
+-- MAGIC ifnull(y2022_feb,0)  as y2022_feb  ,
+-- MAGIC ifnull(y2022_mar,0)  as y2022_mar  ,
+-- MAGIC ifnull(y2022_apr,0)  as y2022_apr  ,
+-- MAGIC ifnull(y2022_may,0)  as y2022_may  ,
+-- MAGIC ifnull(y2022_jun,0)  as y2022_jun  ,
+-- MAGIC ifnull(y2022_jul,0)  as y2022_jul  ,
+-- MAGIC ifnull(y2022_aug,0)  as y2022_aug  ,
+-- MAGIC ifnull(y2022_sep,0)  as y2022_sep  ,
+-- MAGIC ifnull(y2022_oct,0)  as y2022_oct  ,
+-- MAGIC ifnull(y2022_nov,0)  as y2022_nov  ,
+-- MAGIC ifnull(y2022_dec,0)  as y2022_dec
+-- MAGIC    
+-- MAGIC
+-- MAGIC  
+-- MAGIC    
+-- MAGIC  FROM fire_month_year 
+-- MAGIC   LEFT JOIN PA2022      ON fire_month_year.GridNum = PA2022.gridnum
+-- MAGIC  -- LEFT JOIN maes_sq1    ON fire_month_year.GridNum = maes_sq1.GridNum
+-- MAGIC   LEFT JOIN EnvZones    ON fire_month_year.GridNum = EnvZones.GridNum
+-- MAGIC   LEFT JOIN lcf_0018    ON fire_month_year.GridNum = lcf_0018.GridNum
+-- MAGIC   LEFT JOIN nuts3_2021  ON fire_month_year.GridNum = nuts3_2021.GridNum  
+-- MAGIC   
+-- MAGIC   """)
+-- MAGIC   
+-- MAGIC   fire_c_table.createOrReplaceTempView("fire_c_table")
+-- MAGIC
+-- MAGIC
+
+-- COMMAND ----------
+
+select count(GridNum) from fire_c_table where ADM_ID >0
+
+-- COMMAND ----------
+
+select count(GridNum) from fire_c_table2 where ADM_ID >0
+
+-- COMMAND ----------
+
+SELECT * FROM fire_c_table limit 5
+
+-- COMMAND ----------
+
+SELECT * FROM fire_c_table limit 5
+
+-- COMMAND ----------
+
+-- MAGIC %md ## 3 Export tables
+
+-- COMMAND ----------
+
+-- MAGIC %scala
+-- MAGIC // Exporting the final table
+-- MAGIC
+-- MAGIC fire_c_table
+-- MAGIC     .coalesce(1) //be careful with this
+-- MAGIC     .write.format("com.databricks.spark.csv")
+-- MAGIC     .mode(SaveMode.Overwrite)
+-- MAGIC     .option("sep","|")
+-- MAGIC     .option("overwriteSchema", "true")
+-- MAGIC     .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+-- MAGIC     .option("emptyValue", "")
+-- MAGIC     .option("header","true")
+-- MAGIC     .option("treatEmptyValuesAsNulls", "true")  
+-- MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/wildfires/wildfires_ctable_1km")
+-- MAGIC
+-- MAGIC
