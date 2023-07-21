@@ -1,5 +1,8 @@
 # Databricks notebook source
 # MAGIC %md # Carbon mapping
+# MAGIC
+# MAGIC ![](https://space4environment.com/fileadmin/Resources/Public/Images/Logos/S4E-Logo.png)
+# MAGIC
 
 # COMMAND ----------
 
@@ -142,7 +145,7 @@
 # MAGIC                   LEFT JOIN   LUT_clc_classes  
 # MAGIC                      ON  CLC_2018.Category  = LUT_clc_classes.LEVEL3_CODE where AreaHa = 1                                 
 # MAGIC                                                         """)                                  
-# MAGIC lULUCF_sq1.createOrReplaceTempView("lULUCF_sq1")  
+# MAGIC lULUCF_sq1.createOrReplaceTempView("lULUCF_2018")  
 # MAGIC
 # MAGIC
 # MAGIC //##########################################################################################################################################
@@ -215,17 +218,298 @@
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC select * from isric_100
+# MAGIC select LULUCF_CODE,LULUCF_DESCRIPTION
+# MAGIC  from lULUCF_2018
+# MAGIC
+# MAGIC group by 
+# MAGIC LULUCF_CODE,LULUCF_DESCRIPTION
+# MAGIC
+# MAGIC
+# MAGIC
 
 # COMMAND ----------
 
-# MAGIC %md ### (2.1 DASHBOARD 1 SOC-STOCk (A) ISRIC 30cm for Cropland, Grassland, (Settlements, other)
-# MAGIC
-# MAGIC ![](https://space4environment.com/fileadmin/Resources/Public/Images/Logos/S4E-Logo.png)
-# MAGIC
-# MAGIC
-# MAGIC ![](https://adb-664128750067591.11.azuredatabricks.net/?o=664128750067591#folder/1973943228871133/Repos/ETC DI/ETC-DI-databricks/images/soc.JPG)
+# MAGIC %md ## 2) Building CUBES
 
 # COMMAND ----------
 
-https://eea1.sharepoint.com/:u:/r/teams/-EXT-ETCDI/Shared%20Documents/C26.%20LULUCF%20carbon%20sequestration%20options/2023/Carbon%20mapping%20-%20overview.vsdx?d=wb023cc746c7e46b286ba74bf69aa9918&csf=1&web=1&e=1feA3B
+# MAGIC %md ### (2.1) SOC STOCK
+
+# COMMAND ----------
+
+# MAGIC %md #### (2.1.1) DASHBOARD SOC-STOCk (A) ISRIC 30cm for Cropland, Grassland, (Settlements, other)
+# MAGIC
+# MAGIC
+# MAGIC ![](https://github.com/eea/ETC-DI-databricks/blob/main/images/soc.JPG?raw=true)
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC --- 1 SET UP SUB-CUBE for the SOC dashboard:
+# MAGIC
+# MAGIC
+# MAGIC SELECT 
+# MAGIC   -----nuts3_2021.GridNum,
+# MAGIC   nuts3_2021.Category,
+# MAGIC   
+# MAGIC   nuts3_2021.GridNum10km,
+# MAGIC   nuts3_2021.ADM_ID,
+# MAGIC   nuts3_2021.ADM_COUNTRY	,
+# MAGIC   nuts3_2021.ISO2	,
+# MAGIC   nuts3_2021.LEVEL3_name	,
+# MAGIC   nuts3_2021.LEVEL2_name	,
+# MAGIC   nuts3_2021.LEVEL1_name	,
+# MAGIC   nuts3_2021.LEVEL0_name	,
+# MAGIC   nuts3_2021.LEVEL3_code	,
+# MAGIC   nuts3_2021.LEVEL2_code	,
+# MAGIC   nuts3_2021.LEVEL1_code	,
+# MAGIC   nuts3_2021.LEVEL0_code	,
+# MAGIC   nuts3_2021.NUTS_EU,	
+# MAGIC   nuts3_2021.TAA ,
+# MAGIC
+# MAGIC   nuts3_2021.AreaHa as AreaHa,
+# MAGIC   isric_30.ocs030cm100m as SOC_STOCK_isric30cm_t_per_ha,    --values expressed as t/ha
+# MAGIC
+# MAGIC   lULUCF_2018.LULUCF_CODE,
+# MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil')) as soil_type,
+# MAGIC   env_zones.Category as env_zones
+# MAGIC   
+# MAGIC
+# MAGIC from nuts3_2021
+# MAGIC
+# MAGIC
+# MAGIC carbonStocks_0_100cm_100m
+# MAGIC LEFT JOIN isric_30     on nuts3_2021.GridNum = isric_30.GridNum
+# MAGIC LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
+# MAGIC LEFT JOIN organic_soil on nuts3_2021.GridNum = organic_soil.GridNum
+# MAGIC LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
+# MAGIC
+# MAGIC where nuts3_2021.LEVEL3_code is not null and lULUCF_2018.LULUCF_CODE in ('CL','GL','SL','OL')
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC --INFO:......FL	Forest land  # CL	Cropland # GL	Grassland #SL	Settlements #WL	Wetlands #OL	Other land #null	null
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %scala
+# MAGIC
+# MAGIC ///2 (group by) SET UP SUB-CUBE for the SOC dashboard:
+# MAGIC
+# MAGIC /// example
+# MAGIC // Exporting the final table  ---city indicator: ua-classes vs. clc-plus inside the core city:
+# MAGIC val SUB_CUBE_SOC_STOCK_1_30cm = spark.sql("""
+# MAGIC
+# MAGIC SELECT 
+# MAGIC   
+# MAGIC   nuts3_2021.Category, ----FOR ADMIN
+# MAGIC   
+# MAGIC   nuts3_2021.GridNum10km,
+# MAGIC   nuts3_2021.ADM_ID,
+# MAGIC   nuts3_2021.ADM_COUNTRY	,
+# MAGIC   nuts3_2021.ISO2	,
+# MAGIC   nuts3_2021.LEVEL3_name	,
+# MAGIC   nuts3_2021.LEVEL2_name	,
+# MAGIC   nuts3_2021.LEVEL1_name	,
+# MAGIC   nuts3_2021.LEVEL0_name	,
+# MAGIC   nuts3_2021.LEVEL3_code	,
+# MAGIC   nuts3_2021.LEVEL2_code	,
+# MAGIC   nuts3_2021.LEVEL1_code	,
+# MAGIC   nuts3_2021.LEVEL0_code	,
+# MAGIC   nuts3_2021.NUTS_EU,	
+# MAGIC   nuts3_2021.TAA ,
+# MAGIC
+# MAGIC   SUM(nuts3_2021.AreaHa) as AreaHa,
+# MAGIC   SUM(isric_30.ocs030cm100m)  as SOC_STOCK_isric30cm_t_per_ha,    --values expressed as t/ha
+# MAGIC
+# MAGIC   lULUCF_2018.LULUCF_CODE,
+# MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil')) as soil_type,
+# MAGIC   env_zones.Category as env_zones
+# MAGIC   
+# MAGIC
+# MAGIC from nuts3_2021
+# MAGIC
+# MAGIC LEFT JOIN isric_30     on nuts3_2021.GridNum = isric_30.GridNum
+# MAGIC LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
+# MAGIC LEFT JOIN organic_soil on nuts3_2021.GridNum = organic_soil.GridNum
+# MAGIC LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
+# MAGIC
+# MAGIC where nuts3_2021.LEVEL3_code is not null and lULUCF_2018.LULUCF_CODE in ('CL','GL','SL','OL')
+# MAGIC
+# MAGIC group by 
+# MAGIC   nuts3_2021.GridNum,
+# MAGIC   nuts3_2021.Category,
+# MAGIC   nuts3_2021.GridNum10km,
+# MAGIC   nuts3_2021.ADM_ID,
+# MAGIC   nuts3_2021.ADM_COUNTRY	,
+# MAGIC   nuts3_2021.ISO2	,
+# MAGIC   nuts3_2021.LEVEL3_name	,
+# MAGIC   nuts3_2021.LEVEL2_name	,
+# MAGIC   nuts3_2021.LEVEL1_name	,
+# MAGIC   nuts3_2021.LEVEL0_name	,
+# MAGIC   nuts3_2021.LEVEL3_code	,
+# MAGIC   nuts3_2021.LEVEL2_code	,
+# MAGIC   nuts3_2021.LEVEL1_code	,
+# MAGIC   nuts3_2021.LEVEL0_code	,
+# MAGIC   nuts3_2021.NUTS_EU,	
+# MAGIC   nuts3_2021.TAA ,
+# MAGIC   lULUCF_2018.LULUCF_CODE,
+# MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC   env_zones.Category ,
+# MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil'))
+# MAGIC --FL	Forest land  # CL	Cropland # GL	Grassland #SL	Settlements #WL	Wetlands #OL	Other land #null	null
+# MAGIC             """)
+# MAGIC SUB_CUBE_SOC_STOCK_1_30cm
+# MAGIC     .coalesce(1) //be careful with this
+# MAGIC     .write.format("com.databricks.spark.csv")
+# MAGIC     .mode(SaveMode.Overwrite)
+# MAGIC     .option("sep","|")
+# MAGIC     .option("overwriteSchema", "true")
+# MAGIC     .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+# MAGIC     .option("emptyValue", "")
+# MAGIC     .option("header","true")
+# MAGIC     .option("treatEmptyValuesAsNulls", "true")  
+# MAGIC   
+# MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/SOC/SOC_STOCK_1_30cm")
+
+# COMMAND ----------
+
+# MAGIC %md #### (2.1.2) DASHBOARD SOC-STOCk (B) ISRIC 100cm for Forest
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC ----- Testing cube for soc-stock forest using isric 100cm dataset:
+# MAGIC
+# MAGIC SELECT 
+# MAGIC   nuts3_2021.GridNum,
+# MAGIC   nuts3_2021.Category,
+# MAGIC   
+# MAGIC   nuts3_2021.GridNum10km,
+# MAGIC   nuts3_2021.ADM_ID,
+# MAGIC   nuts3_2021.ADM_COUNTRY	,
+# MAGIC   nuts3_2021.ISO2	,
+# MAGIC   nuts3_2021.LEVEL3_name	,
+# MAGIC   nuts3_2021.LEVEL2_name	,
+# MAGIC   nuts3_2021.LEVEL1_name	,
+# MAGIC   nuts3_2021.LEVEL0_name	,
+# MAGIC   nuts3_2021.LEVEL3_code	,
+# MAGIC   nuts3_2021.LEVEL2_code	,
+# MAGIC   nuts3_2021.LEVEL1_code	,
+# MAGIC   nuts3_2021.LEVEL0_code	,
+# MAGIC   nuts3_2021.NUTS_EU,	
+# MAGIC   nuts3_2021.TAA ,
+# MAGIC
+# MAGIC   SUM(nuts3_2021.AreaHa) as AreaHa,
+# MAGIC   SUM(isric_100.ocs030cm100m)  as SOC_STOCK_isric100cm_t_per_ha,    --values expressed as t/ha
+# MAGIC
+# MAGIC   lULUCF_2018.LULUCF_CODE,
+# MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil')) as soil_type,
+# MAGIC   env_zones.Category as env_zones
+# MAGIC   
+# MAGIC
+# MAGIC from nuts3_2021
+# MAGIC
+# MAGIC LEFT JOIN isric_100    on nuts3_2021.GridNum = isric_100.GridNum
+# MAGIC LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
+# MAGIC LEFT JOIN organic_soil on nuts3_2021.GridNum = organic_soil.GridNum
+# MAGIC LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
+# MAGIC
+# MAGIC where nuts3_2021.LEVEL3_code is not null and lULUCF_2018.LULUCF_CODE = 'FL'   ---- only for forest
+# MAGIC
+# MAGIC group by 
+# MAGIC   nuts3_2021.GridNum,
+# MAGIC   nuts3_2021.Category,
+# MAGIC   nuts3_2021.GridNum10km,
+# MAGIC   nuts3_2021.ADM_ID,
+# MAGIC   nuts3_2021.ADM_COUNTRY	,
+# MAGIC   nuts3_2021.ISO2	,
+# MAGIC   nuts3_2021.LEVEL3_name	,
+# MAGIC   nuts3_2021.LEVEL2_name	,
+# MAGIC   nuts3_2021.LEVEL1_name	,
+# MAGIC   nuts3_2021.LEVEL0_name	,
+# MAGIC   nuts3_2021.LEVEL3_code	,
+# MAGIC   nuts3_2021.LEVEL2_code	,
+# MAGIC   nuts3_2021.LEVEL1_code	,
+# MAGIC   nuts3_2021.LEVEL0_code	,
+# MAGIC   nuts3_2021.NUTS_EU,	
+# MAGIC   nuts3_2021.TAA ,
+# MAGIC   lULUCF_2018.LULUCF_CODE,
+# MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC   env_zones.Category ,
+# MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil'))
+
+# COMMAND ----------
+
+# MAGIC %scala
+# MAGIC
+# MAGIC ///2 (group by) SET UP SUB-CUBE for the SOC dashboard:
+# MAGIC
+# MAGIC /// example
+# MAGIC // Exporting the final table  ---city indicator: ua-classes vs. clc-plus inside the core city:
+# MAGIC val SUB_CUBE_SOC_STOCK_2_100cm = spark.sql("""
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC --FL	Forest land  # CL	Cropland # GL	Grassland #SL	Settlements #WL	Wetlands #OL	Other land #null	null
+# MAGIC             """)
+# MAGIC SUB_CUBE_SOC_STOCK_2_100cm
+# MAGIC     .coalesce(1) //be careful with this
+# MAGIC     .write.format("com.databricks.spark.csv")
+# MAGIC     .mode(SaveMode.Overwrite)
+# MAGIC     .option("sep","|")
+# MAGIC     .option("overwriteSchema", "true")
+# MAGIC     .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+# MAGIC     .option("emptyValue", "")
+# MAGIC     .option("header","true")
+# MAGIC     .option("treatEmptyValuesAsNulls", "true")  
+# MAGIC   
+# MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/SOC/SOC_STOCK_2_100cm")
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+# MAGIC %md ### (2.2) SOC FLUX
+
+# COMMAND ----------
+
+# MAGIC %md #### (2.2.1) DASHBOARD  SOC-FLUX (A) JRC-DAY-CENT 1km time series for Cropland and Grassland
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+# MAGIC %md ### (2.3) AGB STOCK
+
+# COMMAND ----------
+
+# MAGIC %md #### (2.3.1) DASHBOARD  AGB-STOCK (A)  ESA CCI (100m) 2018 for Forest, Agro-forestry and permanent crops  Settlements  (check UNITS!!)
+
+# COMMAND ----------
+
+# MAGIC %md #### (2.3.2) DASHBOARD  AGB-STOCK (B)  GDMP2018 for Grassland 
+
+# COMMAND ----------
+
+# MAGIC %md ### (2.4) AGB FLUX
