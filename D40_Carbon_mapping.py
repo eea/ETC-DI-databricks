@@ -223,6 +223,8 @@
 # MAGIC
 # MAGIC ![](https://space4environment.com/fileadmin/Resources/Public/Images/Logos/S4E-Logo.png)
 # MAGIC
+# MAGIC
+# MAGIC ![](https://adb-664128750067591.11.azuredatabricks.net/?o=664128750067591#folder/1973943228871133/Repos/ETC DI/ETC-DI-databricks/images/soc.JPG)
 
 # COMMAND ----------
 
