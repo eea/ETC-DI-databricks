@@ -115,13 +115,6 @@
 # MAGIC nuts3_2021.createOrReplaceTempView("nuts3_2021")
 # MAGIC
 # MAGIC
-# MAGIC
-# MAGIC
-# MAGIC
-# MAGIC //##########################################################################################################################################
-# MAGIC
-# MAGIC
-# MAGIC
 # MAGIC //##########################################################################################################################################
 # MAGIC //// (1) CLC and LUT-clc for lULUCF classes ################################################################################
 # MAGIC //##########################################################################################################################################
@@ -129,8 +122,6 @@
 # MAGIC // Reading CLC2018 100m DIM:.....
 # MAGIC val parquetFileDF_clc18 = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_A_CLC_18_210_20181129_100m/")
 # MAGIC parquetFileDF_clc18.createOrReplaceTempView("CLC_2018")
-# MAGIC
-# MAGIC
 # MAGIC
 # MAGIC // Reading the LUT for CLC...:
 # MAGIC val lut_clc  = spark.read.format("csv")
@@ -153,11 +144,86 @@
 # MAGIC                                                         """)                                  
 # MAGIC lULUCF_sq1.createOrReplaceTempView("lULUCF_sq1")  
 # MAGIC
+# MAGIC
 # MAGIC //##########################################################################################################################################
-# MAGIC //// (4)################################################################################
+# MAGIC //// (3) ENV zones (Metzger) ################################################################################                 100m DIM
 # MAGIC //##########################################################################################################################################
+# MAGIC // https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=1519&fileId=544&successMessage=true
+# MAGIC // cwsblobstorage01/cwsblob01/Dimensions/D_EnvZones_544_2020528_100m
+# MAGIC
+# MAGIC val parquetFileDF_env_zones = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_EnvZones_544_2020528_100m/")
+# MAGIC parquetFileDF_env_zones.createOrReplaceTempView("env_zones")
+# MAGIC
+# MAGIC
+# MAGIC //##########################################################################################################################################
+# MAGIC //// (4) Organic-mineral soils ---Tanneberger 2017 ###############################################################################   100m DIM
+# MAGIC //##########################################################################################################################################
+# MAGIC //    https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=1957&fileId=982
+# MAGIC //    cwsblobstorage01/cwsblob01/Dimensions/D_organicsoil_982_2023313_1km
+# MAGIC //      1 Mineral soils
+# MAGIC //      2 Organic soils (peatlands)
+# MAGIC
+# MAGIC val parquetFileDF_organic_soil = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_organicsoil_982_2023313_1km/")
+# MAGIC parquetFileDF_organic_soil.createOrReplaceTempView("organic_soil")
+# MAGIC
+# MAGIC //##########################################################################################################################################
+# MAGIC //// (5) LCF ##############################################################################                 100m DIM
+# MAGIC //##########################################################################################################################################
+# MAGIC
+# MAGIC
+# MAGIC //##########################################################################################################################################
+# MAGIC //// (6) Protected AREA (PA)  ##############################################################################                 100m DIM
+# MAGIC //##########################################################################################################################################
+# MAGIC
+# MAGIC //    https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=1910&fileId=935
+# MAGIC //    cwsblobstorage01/cwsblob01/Dimensions/D_PA2022_100m_935_20221111_100m
+# MAGIC val parquetFileDF_PA2022 = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_PA2022_100m_935_20221111_100m/")
+# MAGIC parquetFileDF_PA2022.createOrReplaceTempView("PA2022")
+# MAGIC
+# MAGIC
+# MAGIC //##########################################################################################################################################
+# MAGIC //// 10.1 (SOC)  ISRIC SOC 0-30 cm################################################################################                 100m DIM
+# MAGIC //##########################################################################################################################################
+# MAGIC //   Organic Carbon Stock from ISRIC
+# MAGIC //   mean rescaled at 100m
+# MAGIC //   values expressed as t/ha
+# MAGIC //   data provided by VITO
+# MAGIC //   S:\Common workspace\ETC_DI\f03_JEDI_PREPARATION\f01_dims\SOC_mapping\ISRIC
+# MAGIC //   https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=1947&fileId=972
+# MAGIC ///  cwsblobstorage01/cwsblob01/Dimensions/D_isricsoc030_972_2023216_100m
+# MAGIC val parquetFileDF_isric_30 = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_isricsoc030_972_2023216_100m/")
+# MAGIC parquetFileDF_isric_30.createOrReplaceTempView("isric_30")
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC //##########################################################################################################################################
+# MAGIC //// 10.2 (SOC) ISRIC Organic Carbon Stock 100cmm################################################################################  100m DIM
+# MAGIC //##########################################################################################################################################
+# MAGIC //   Organic Carbon Stock from ISRIC
+# MAGIC //   Calculated
+# MAGIC //   sum of carbon densities (SoilGrids, Organic carbon density) weighted by layer thickness 
+# MAGIC //   ['ocd_0-5cm_mean'*0.05 +'ocd_5-15cm_mean'+0.1+'ocd_15-30cm_mean'*0.15+'ocd_30-60cm_mean'*0.3+'ocd_60-100cm_mean'*0.4] '
+# MAGIC //   *0.001 to convert from hg/dm3 (kg/m3) to ton/ha for 1 m of thickness
+# MAGIC //   https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=1958&fileId=983
+# MAGIC ///  cwsblobstorage01/cwsblob01/Dimensions/D_isricocs100_983_2023320_100m
+# MAGIC
+# MAGIC val parquetFileDF_isric_100 = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_isricocs100_983_2023320_100m/")
+# MAGIC parquetFileDF_isric_100.createOrReplaceTempView("isric_100")
+# MAGIC
+# MAGIC
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC select * from lULUCF_sq1
+# MAGIC select * from isric_100
+
+# COMMAND ----------
+
+# MAGIC %md ### (2.1 DASHBOARD 1 SOC-STOCk (A) ISRIC 30cm for Cropland, Grassland, (Settlements, other)
+# MAGIC
+# MAGIC ![](https://space4environment.com/fileadmin/Resources/Public/Images/Logos/S4E-Logo.png)
+# MAGIC
+
+# COMMAND ----------
+
+https://eea1.sharepoint.com/:u:/r/teams/-EXT-ETCDI/Shared%20Documents/C26.%20LULUCF%20carbon%20sequestration%20options/2023/Carbon%20mapping%20-%20overview.vsdx?d=wb023cc746c7e46b286ba74bf69aa9918&csf=1&web=1&e=1feA3B
