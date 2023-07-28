@@ -285,6 +285,81 @@
 # MAGIC
 # MAGIC
 # MAGIC
+# MAGIC //##########################################################################################################################################
+# MAGIC //// 13 (GDMP 1km   1999-2019)  1km-- ############################## 1000m DIM
+# MAGIC //##########################################################################################################################################
+# MAGIC
+# MAGIC
+# MAGIC //  https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=2009&fileId=1031
+# MAGIC //  absolute value and standard deviation The GDMP_annual is expressed in kg DM/ha    (DM= dry matter)
+# MAGIC //  cwsblobstorage01/cwsblob01/Dimensions/D_gdmp_1km_1031_2023724_1km
+# MAGIC
+# MAGIC val parquetFileDF_gdmp_1km = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_gdmp_1km_1031_2023724_1km/")
+# MAGIC parquetFileDF_gdmp_1km.createOrReplaceTempView("GDMP_1km_99_19_raw")
+# MAGIC
+# MAGIC // we found GAPs in the time-series.. therefore we add. an attribute which shows the gaps [QC_gap_YES]
+# MAGIC // if the attribute is 1, then this row should not be used for statistics OR a gab filling should be done:
+# MAGIC
+# MAGIC val parquetFileDF_gdmp_1km_2 = spark.sql(""" 
+# MAGIC
+# MAGIC Select
+# MAGIC gridnum,
+# MAGIC GridNum10km,
+# MAGIC x,
+# MAGIC y,
+# MAGIC AreaHa,
+# MAGIC
+# MAGIC GDMP_1999_pv_1000m_EPSG3035 as GDMP_1999 ,
+# MAGIC GDMP_2000_pv_1000m_EPSG3035 as GDMP_2000 ,
+# MAGIC GDMP_2001_pv_1000m_EPSG3035 as GDMP_2001 ,
+# MAGIC GDMP_2002_pv_1000m_EPSG3035 as GDMP_2002 ,
+# MAGIC GDMP_2003_pv_1000m_EPSG3035 as GDMP_2003 ,
+# MAGIC GDMP_2004_pv_1000m_EPSG3035 as GDMP_2004 ,
+# MAGIC GDMP_2005_pv_1000m_EPSG3035 as GDMP_2005 ,
+# MAGIC GDMP_2006_pv_1000m_EPSG3035 as GDMP_2006 ,
+# MAGIC GDMP_2007_pv_1000m_EPSG3035 as GDMP_2007 ,
+# MAGIC GDMP_2008_pv_1000m_EPSG3035 as GDMP_2008 ,
+# MAGIC GDMP_2009_pv_1000m_EPSG3035 as GDMP_2009 ,
+# MAGIC GDMP_2010_pv_1000m_EPSG3035 as GDMP_2010 ,
+# MAGIC GDMP_2011_pv_1000m_EPSG3035 as GDMP_2011 ,
+# MAGIC GDMP_2012_pv_1000m_EPSG3035 as GDMP_2012 ,
+# MAGIC GDMP_2013_pv_1000m_EPSG3035 as GDMP_2013 ,
+# MAGIC GDMP_2014_pv_1000m_EPSG3035 as GDMP_2014 ,
+# MAGIC GDMP_2015_pv_1000m_EPSG3035 as GDMP_2015 ,
+# MAGIC GDMP_2016_pv_1000m_EPSG3035 as GDMP_2016 ,
+# MAGIC GDMP_2017_pv_1000m_EPSG3035 as GDMP_2017 ,
+# MAGIC GDMP_2018_pv_1000m_EPSG3035 as GDMP_2018 ,
+# MAGIC GDMP_2019_pv_1000m_EPSG3035 as GDMP_2019 ,
+# MAGIC
+# MAGIC if(GDMP_1999_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2000_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2001_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2002_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2003_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2004_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2005_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2006_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2007_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2008_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2009_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2010_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2011_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2012_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2013_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2014_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2015_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2016_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2017_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2018_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2019_pv_1000m_EPSG3035= 0 , 1 , 
+# MAGIC 0)))))))))))))))))))))
+# MAGIC    as QC_gap_YES
+# MAGIC     from GDMP_1km_99_19_raw  
+# MAGIC                                                   
+# MAGIC                                                         """)                                  
+# MAGIC parquetFileDF_gdmp_1km_2.createOrReplaceTempView("GDMP_1km_99_19")  
+# MAGIC
+# MAGIC
 
 # COMMAND ----------
 
@@ -292,6 +367,7 @@
 # MAGIC select LULUCF_CODE,LULUCF_DESCRIPTION
 # MAGIC  from lULUCF_2018
 # MAGIC
+# MAGIC where 
 # MAGIC group by 
 # MAGIC LULUCF_CODE,LULUCF_DESCRIPTION
 # MAGIC
@@ -301,10 +377,19 @@
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC select *
+# MAGIC select 
 # MAGIC
-# MAGIC from CLC_2018
 # MAGIC
+# MAGIC from BGB_forest_2020  
+# MAGIC where FCM_Europe_demo_2020_BGB < 0 ---or FCM_Europe_demo_2020_BGB =128
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC select * from GDMP_1km_99_19
+# MAGIC  
 
 # COMMAND ----------
 
@@ -403,6 +488,89 @@
 # MAGIC     .option("treatEmptyValuesAsNulls", "true")  
 # MAGIC   
 # MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/SOC/SOC_STOCK_1_30cm_nuts3")
+
+# COMMAND ----------
+
+# MAGIC %scala
+# MAGIC
+# MAGIC ///2 (group by) SET UP SUB-CUBE for the SOC dashboard:
+# MAGIC
+# MAGIC /// example
+# MAGIC // Exporting the final table  ---city indicator: ua-classes vs. clc-plus inside the core city:
+# MAGIC val SUB_CUBE_SOC_STOCK_1_30cm = spark.sql("""
+# MAGIC
+# MAGIC SELECT 
+# MAGIC   
+# MAGIC   nuts3_2021.Category, ----FOR ADMIN
+# MAGIC   
+# MAGIC   nuts3_2021.GridNum10km,
+# MAGIC   nuts3_2021.ADM_ID,
+# MAGIC   nuts3_2021.ADM_COUNTRY	,
+# MAGIC   nuts3_2021.ISO2	,
+# MAGIC   nuts3_2021.LEVEL3_name	,
+# MAGIC   nuts3_2021.LEVEL2_name	,
+# MAGIC   nuts3_2021.LEVEL1_name	,
+# MAGIC   nuts3_2021.LEVEL0_name	,
+# MAGIC   nuts3_2021.LEVEL3_code	,
+# MAGIC   nuts3_2021.LEVEL2_code	,
+# MAGIC   nuts3_2021.LEVEL1_code	,
+# MAGIC   nuts3_2021.LEVEL0_code	,
+# MAGIC   nuts3_2021.NUTS_EU,	
+# MAGIC   nuts3_2021.TAA ,
+# MAGIC
+# MAGIC   SUM(nuts3_2021.AreaHa) as AreaHa,
+# MAGIC   SUM(isric_30.ocs030cm100m)  as SOC_STOCK_isric30cm_t,    --values expressed as t/ha
+# MAGIC
+# MAGIC   lULUCF_2018.LULUCF_CODE,
+# MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil')) as soil_type,
+# MAGIC   env_zones.Category as env_zones
+# MAGIC   
+# MAGIC
+# MAGIC from nuts3_2021
+# MAGIC
+# MAGIC LEFT JOIN isric_30     on nuts3_2021.GridNum = isric_30.GridNum
+# MAGIC LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
+# MAGIC LEFT JOIN organic_soil on nuts3_2021.GridNum1km = organic_soil.GridNum  ------ 1km JOIN !!!!!!
+# MAGIC LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
+# MAGIC
+# MAGIC where nuts3_2021.LEVEL3_code is not null and lULUCF_2018.LULUCF_CODE in ('CL','GL','SL','OL')
+# MAGIC
+# MAGIC group by 
+# MAGIC
+# MAGIC   nuts3_2021.Category,
+# MAGIC   nuts3_2021.GridNum10km,
+# MAGIC   nuts3_2021.ADM_ID,
+# MAGIC   nuts3_2021.ADM_COUNTRY	,
+# MAGIC   nuts3_2021.ISO2	,
+# MAGIC   nuts3_2021.LEVEL3_name	,
+# MAGIC   nuts3_2021.LEVEL2_name	,
+# MAGIC   nuts3_2021.LEVEL1_name	,
+# MAGIC   nuts3_2021.LEVEL0_name	,
+# MAGIC   nuts3_2021.LEVEL3_code	,
+# MAGIC   nuts3_2021.LEVEL2_code	,
+# MAGIC   nuts3_2021.LEVEL1_code	,
+# MAGIC   nuts3_2021.LEVEL0_code	,
+# MAGIC   nuts3_2021.NUTS_EU,	
+# MAGIC   nuts3_2021.TAA ,
+# MAGIC   lULUCF_2018.LULUCF_CODE,
+# MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC   env_zones.Category ,
+# MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil'))
+# MAGIC --FL	Forest land  # CL	Cropland # GL	Grassland #SL	Settlements #WL	Wetlands #OL	Other land #null	null
+# MAGIC             """)
+# MAGIC SUB_CUBE_SOC_STOCK_1_30cm
+# MAGIC     .coalesce(1) //be careful with this
+# MAGIC     .write.format("com.databricks.spark.csv")
+# MAGIC     .mode(SaveMode.Overwrite)
+# MAGIC     .option("sep","|")
+# MAGIC     .option("overwriteSchema", "true")
+# MAGIC     .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+# MAGIC     .option("emptyValue", "")
+# MAGIC     .option("header","true")
+# MAGIC     .option("treatEmptyValuesAsNulls", "true")  
+# MAGIC   
+# MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/SOC/SOC_STOCK_1_30cm_10km_nuts3")
 
 # COMMAND ----------
 
@@ -1329,6 +1497,157 @@ df_transformed
 # COMMAND ----------
 
 # MAGIC %md #### (2.3.2) DASHBOARD  AGB-STOCK (B)  GDMP2018 for Grassland 
+# MAGIC
+# MAGIC for grassland ghte gdmp2018 1km (100m) will be used
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC Select * from GDMP_1km_99_19
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT 
+# MAGIC         nuts3_2021.Category, 
+# MAGIC         ----nuts3_2021.GridNum10km,
+# MAGIC         nuts3_2021.ADM_ID,
+# MAGIC         nuts3_2021.ADM_COUNTRY	,
+# MAGIC         nuts3_2021.ISO2	,
+# MAGIC         nuts3_2021.LEVEL3_name	,
+# MAGIC         nuts3_2021.LEVEL2_name	,
+# MAGIC         nuts3_2021.LEVEL1_name	,
+# MAGIC         nuts3_2021.LEVEL0_name	,
+# MAGIC         nuts3_2021.LEVEL3_code	,
+# MAGIC         nuts3_2021.LEVEL2_code	,
+# MAGIC         nuts3_2021.LEVEL1_code	,
+# MAGIC         nuts3_2021.LEVEL0_code	,
+# MAGIC         nuts3_2021.NUTS_EU,	
+# MAGIC         nuts3_2021.TAA ,
+# MAGIC         ----CLC_2018.Category as clc18_level3_class,
+# MAGIC         SUM(nuts3_2021.AreaHa) as AreaHa,
+# MAGIC         SUM(GDMP_1km_99_19.GDMP_2018) as GDMP_2018,
+# MAGIC         
+# MAGIC         lULUCF_2018.LULUCF_CODE,
+# MAGIC         lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC         if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil')) as soil_type,
+# MAGIC         env_zones.Category as env_zones
+# MAGIC     
+# MAGIC       from nuts3_2021
+# MAGIC
+# MAGIC       LEFT JOIN GDMP_1km_99_19     on nuts3_2021.GridNum1km = GDMP_1km_99_19.GridNum ------ 1km JOIN !!!!!!
+# MAGIC       LEFT JOIN lULUCF_2018        on nuts3_2021.GridNum =    lULUCF_2018.GridNum
+# MAGIC       LEFT JOIN organic_soil       on nuts3_2021.GridNum1km = organic_soil.GridNum  ------ 1km JOIN !!!!!!
+# MAGIC       LEFT JOIN env_zones          on nuts3_2021.GridNum =    env_zones.GridNum
+# MAGIC      ----- LEFT JOIN CLC_2018           on nuts3_2021.GridNum =    CLC_2018.GridNum ---
+# MAGIC
+# MAGIC
+# MAGIC       where  nuts3_2021.LEVEL3_code is not null  and lULUCF_2018.LULUCF_CODE in ('GL')
+# MAGIC
+# MAGIC     group by 
+# MAGIC
+# MAGIC         nuts3_2021.Category,
+# MAGIC         ----nuts3_2021.GridNum10km,
+# MAGIC         nuts3_2021.ADM_ID,
+# MAGIC         nuts3_2021.ADM_COUNTRY	,
+# MAGIC         nuts3_2021.ISO2	,
+# MAGIC         nuts3_2021.LEVEL3_name	,
+# MAGIC         nuts3_2021.LEVEL2_name	,
+# MAGIC         nuts3_2021.LEVEL1_name	,
+# MAGIC         nuts3_2021.LEVEL0_name	,
+# MAGIC         nuts3_2021.LEVEL3_code	,
+# MAGIC         nuts3_2021.LEVEL2_code	,
+# MAGIC         nuts3_2021.LEVEL1_code	,
+# MAGIC         nuts3_2021.LEVEL0_code	,
+# MAGIC         nuts3_2021.NUTS_EU,	
+# MAGIC         nuts3_2021.TAA ,
+# MAGIC         ---CLC_2018.Category,
+# MAGIC         lULUCF_2018.LULUCF_CODE,
+# MAGIC         lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC         env_zones.Category ,
+# MAGIC         if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil'))
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %scala
+# MAGIC /// exporting AGB stock  2 -gdmp 1km 2018
+# MAGIC val tableDF_export_db_nuts3_agb2 = spark.sql("""
+# MAGIC
+# MAGIC SELECT 
+# MAGIC         nuts3_2021.Category, 
+# MAGIC         ----nuts3_2021.GridNum10km,
+# MAGIC         nuts3_2021.ADM_ID,
+# MAGIC         nuts3_2021.ADM_COUNTRY	,
+# MAGIC         nuts3_2021.ISO2	,
+# MAGIC         nuts3_2021.LEVEL3_name	,
+# MAGIC         nuts3_2021.LEVEL2_name	,
+# MAGIC         nuts3_2021.LEVEL1_name	,
+# MAGIC         nuts3_2021.LEVEL0_name	,
+# MAGIC         nuts3_2021.LEVEL3_code	,
+# MAGIC         nuts3_2021.LEVEL2_code	,
+# MAGIC         nuts3_2021.LEVEL1_code	,
+# MAGIC         nuts3_2021.LEVEL0_code	,
+# MAGIC         nuts3_2021.NUTS_EU,	
+# MAGIC         nuts3_2021.TAA ,
+# MAGIC         ----CLC_2018.Category as clc18_level3_class,
+# MAGIC         SUM(nuts3_2021.AreaHa) as AreaHa,
+# MAGIC         SUM(GDMP_1km_99_19.GDMP_2018) as GDMP_2018,
+# MAGIC         
+# MAGIC         lULUCF_2018.LULUCF_CODE,
+# MAGIC         lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC         if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil')) as soil_type,
+# MAGIC         env_zones.Category as env_zones
+# MAGIC     
+# MAGIC       from nuts3_2021
+# MAGIC
+# MAGIC       LEFT JOIN GDMP_1km_99_19     on nuts3_2021.GridNum1km = GDMP_1km_99_19.GridNum ------ 1km JOIN !!!!!!
+# MAGIC       LEFT JOIN lULUCF_2018        on nuts3_2021.GridNum =    lULUCF_2018.GridNum
+# MAGIC       LEFT JOIN organic_soil       on nuts3_2021.GridNum1km = organic_soil.GridNum  ------ 1km JOIN !!!!!!
+# MAGIC       LEFT JOIN env_zones          on nuts3_2021.GridNum =    env_zones.GridNum
+# MAGIC      ----- LEFT JOIN CLC_2018           on nuts3_2021.GridNum =    CLC_2018.GridNum ---
+# MAGIC
+# MAGIC
+# MAGIC       where  nuts3_2021.LEVEL3_code is not null  and lULUCF_2018.LULUCF_CODE in ('GL')
+# MAGIC
+# MAGIC     group by 
+# MAGIC
+# MAGIC         nuts3_2021.Category,
+# MAGIC         ----nuts3_2021.GridNum10km,
+# MAGIC         nuts3_2021.ADM_ID,
+# MAGIC         nuts3_2021.ADM_COUNTRY	,
+# MAGIC         nuts3_2021.ISO2	,
+# MAGIC         nuts3_2021.LEVEL3_name	,
+# MAGIC         nuts3_2021.LEVEL2_name	,
+# MAGIC         nuts3_2021.LEVEL1_name	,
+# MAGIC         nuts3_2021.LEVEL0_name	,
+# MAGIC         nuts3_2021.LEVEL3_code	,
+# MAGIC         nuts3_2021.LEVEL2_code	,
+# MAGIC         nuts3_2021.LEVEL1_code	,
+# MAGIC         nuts3_2021.LEVEL0_code	,
+# MAGIC         nuts3_2021.NUTS_EU,	
+# MAGIC         nuts3_2021.TAA ,
+# MAGIC         ---CLC_2018.Category,
+# MAGIC         lULUCF_2018.LULUCF_CODE,
+# MAGIC         lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC         env_zones.Category ,
+# MAGIC         if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil'))
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC """)
+# MAGIC tableDF_export_db_nuts3_agb2
+# MAGIC     .coalesce(1) //be careful with this
+# MAGIC     .write.format("com.databricks.spark.csv")
+# MAGIC     .mode(SaveMode.Overwrite)
+# MAGIC     .option("sep","|")
+# MAGIC     .option("overwriteSchema", "true")
+# MAGIC     .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+# MAGIC     .option("emptyValue", "")
+# MAGIC     .option("header","true")
+# MAGIC     .option("treatEmptyValuesAsNulls", "true")  
+# MAGIC     
+# MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/AGB/AGB_STOCK2_GDMP_1km_2018")
 
 # COMMAND ----------
 

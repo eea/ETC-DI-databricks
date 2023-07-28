@@ -229,7 +229,6 @@
 -- MAGIC
 -- MAGIC  FIREDATE_2000,
 -- MAGIC         ifnull(IF(FIREDATE_2000= 1, 1,0),0 )  as y2000_jan,
--- MAGIC
 -- MAGIC         ifnull(IF(FIREDATE_2000= 2, 1,0) ,0 )  as y2000_feb,
 -- MAGIC         ifnull(IF(FIREDATE_2000= 3, 1,0) ,0 )  as y2000_mar,
 -- MAGIC         ifnull(IF(FIREDATE_2000= 4, 1,0) ,0 )  as y2000_apr,
@@ -255,8 +254,6 @@
 -- MAGIC         ifnull(IF(FIREDATE_2001= 10, 1,0) ,0 )  as y2001_oct,
 -- MAGIC         ifnull(IF(FIREDATE_2001= 11, 1,0) ,0 )  as y2001_nov,
 -- MAGIC         ifnull(IF(FIREDATE_2001= 12, 1,0) ,0 )  as y2001_dec,
--- MAGIC
--- MAGIC
 -- MAGIC         FIREDATE_2002,
 -- MAGIC         ifnull(IF(FIREDATE_2002= 1, 1,0) ,0 )  as y2002_jan,
 -- MAGIC          ifnull(IF(FIREDATE_2002= 2, 1,0) ,0 )  as y2002_feb,
@@ -270,7 +267,6 @@
 -- MAGIC         ifnull(IF(FIREDATE_2002= 10, 1,0) ,0 )  as y2002_oct,
 -- MAGIC         ifnull(IF(FIREDATE_2002= 11, 1,0) ,0 )  as y2002_nov,
 -- MAGIC         ifnull(IF(FIREDATE_2002= 12, 1,0) ,0 )  as y2002_dec,
--- MAGIC
 -- MAGIC         FIREDATE_2003,
 -- MAGIC         ifnull(IF(FIREDATE_2003= 1, 1,0) ,0 )  as y2003_jan,
 -- MAGIC         ifnull(IF(FIREDATE_2003= 2, 1,0) ,0 )  as y2003_feb,
@@ -284,7 +280,6 @@
 -- MAGIC         ifnull(IF(FIREDATE_2003= 10, 1,0) ,0 )  as y2003_oct,
 -- MAGIC         ifnull(IF(FIREDATE_2003= 11, 1,0) ,0 )  as y2003_nov,
 -- MAGIC         ifnull(IF(FIREDATE_2003= 12, 1,0) ,0 )  as y2003_dec,
--- MAGIC
 -- MAGIC         FIREDATE_2004,
 -- MAGIC         ifnull(IF(FIREDATE_2004= 1, 1,0) ,0 )  as y2004_jan,
 -- MAGIC         ifnull(IF(FIREDATE_2004= 2, 1,0) ,0 )  as y2004_feb,
@@ -298,7 +293,6 @@
 -- MAGIC         ifnull(IF(FIREDATE_2004= 10, 1,0) ,0 )  as y2004_oct,
 -- MAGIC         ifnull(IF(FIREDATE_2004= 11, 1,0) ,0 )  as y2004_nov,
 -- MAGIC         ifnull(IF(FIREDATE_2004= 12, 1,0) ,0 )  as y2004_dec,
--- MAGIC
 -- MAGIC         FIREDATE_2005,
 -- MAGIC         ifnull(IF(FIREDATE_2005= 1, 1,0) ,0 )  as y2005_jan,
 -- MAGIC         ifnull(IF(FIREDATE_2005= 2, 1,0) ,0 )  as y2005_feb,
@@ -312,8 +306,6 @@
 -- MAGIC         ifnull(IF(FIREDATE_2005= 10, 1,0) ,0 )  as y2005_oct,
 -- MAGIC         ifnull(IF(FIREDATE_2005= 11, 1,0) ,0 )  as y2005_nov,
 -- MAGIC         ifnull(IF(FIREDATE_2005= 12, 1,0) ,0 )  as y2005_dec,
--- MAGIC
--- MAGIC
 -- MAGIC         FIREDATE_2006,
 -- MAGIC         ifnull(IF(FIREDATE_2006= 1, 1,0) ,0 )  as y2006_jan,
 -- MAGIC         ifnull(IF(FIREDATE_2006= 2, 1,0) ,0 )  as y2006_feb,
@@ -543,6 +535,12 @@
 -- MAGIC  """)
 -- MAGIC                                   
 -- MAGIC fire_year_month.createOrReplaceTempView("fire_month_year")
+
+-- COMMAND ----------
+
+select * from fire_month_year 
+where FIREDATE_2000>0
+ limit (10)
 
 -- COMMAND ----------
 
