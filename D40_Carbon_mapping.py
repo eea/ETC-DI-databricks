@@ -244,8 +244,34 @@
 # MAGIC // cwsblobstorage01/cwsblob01/Dimensions/D_extwet_cstock_1026_2023717_100m
 # MAGIC // UNIT: Mg C ha-1          equal to t/ha
 # MAGIC val parquetFileDF_soc_stock_ext_wetland = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_extwet_cstock_1026_2023717_100m/")
-# MAGIC parquetFileDF_soc_stock_ext_wetland.createOrReplaceTempView("soc_stock_ext_wetland")
+# MAGIC parquetFileDF_soc_stock_ext_wetland.createOrReplaceTempView("soc_stock_ext_wetland_draft")
 # MAGIC
+# MAGIC
+# MAGIC // Reading the LUT wetland - SOC values...:
+# MAGIC //https://jedi.discomap.eea.europa.eu/LookUp/show?lookUpId=150
+# MAGIC //cwsblobstorage01/cwsblob01/Lookups/extwetCstockLUT/20230717151903.49.csv
+# MAGIC
+# MAGIC val schema_lut_wetland= new StructType()
+# MAGIC .add("FIT",LongType,true)
+# MAGIC .add("Extwet_Cla",StringType,true)
+# MAGIC .add("C_stok",FloatType,true)
+# MAGIC
+# MAGIC val lut_wetland  = spark.read.format("csv")
+# MAGIC .schema(schema_lut_wetland)
+# MAGIC .options(Map("delimiter"->"|"))
+# MAGIC  //.option("header", "true")
+# MAGIC    .load("dbfs:/mnt/trainingDatabricks/Lookups/extwetCstockLUT/20230717151903.49.csv")     
+# MAGIC lut_wetland.createOrReplaceTempView("LUT_wetland")
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC val soc_wetland = spark.sql(""" 
+# MAGIC          
+# MAGIC       Select * from soc_stock_ext_wetland_draft
+# MAGIC       left join LUT_wetland on wetlands_categories=FIT                                         
+# MAGIC                                                         """)                                  
+# MAGIC soc_wetland.createOrReplaceTempView("soc_stock_ext_wetland")  
 # MAGIC
 # MAGIC
 # MAGIC //##########################################################################################################################################
@@ -364,6 +390,22 @@
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC select * from soc_stock_ext_wetland
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC Select * from soc_stock_ext_wetland_draft
+# MAGIC
+# MAGIC left join LUT_wetland on wetlands_categories=FIT
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+# MAGIC %sql
 # MAGIC select LULUCF_CODE,LULUCF_DESCRIPTION
 # MAGIC  from lULUCF_2018
 # MAGIC
@@ -405,6 +447,82 @@
 # MAGIC
 # MAGIC
 # MAGIC ![](https://github.com/eea/ETC-DI-databricks/blob/main/images/soc.JPG?raw=true)
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC Select 
+# MAGIC isric_30.gridnum
+# MAGIC isric_30.ocs030cm100m
+# MAGIC isric_30.AreaHa
+# MAGIC isric_30.GridNum10km
+# MAGIC  from isric_30
+# MAGIC
+# MAGIC left join nuts3_2021 on nuts3_2021.gridnum =isric_30.gridnum
+# MAGIC where 
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT 
+# MAGIC   
+# MAGIC   nuts3_2021.Category, ----FOR ADMIN
+# MAGIC   
+# MAGIC   ----nuts3_2021.GridNum10km,
+# MAGIC   nuts3_2021.ADM_ID,
+# MAGIC   nuts3_2021.ADM_COUNTRY	,
+# MAGIC   nuts3_2021.ISO2	,
+# MAGIC   nuts3_2021.LEVEL3_name	,
+# MAGIC   nuts3_2021.LEVEL2_name	,
+# MAGIC   nuts3_2021.LEVEL1_name	,
+# MAGIC   nuts3_2021.LEVEL0_name	,
+# MAGIC   nuts3_2021.LEVEL3_code	,
+# MAGIC   nuts3_2021.LEVEL2_code	,
+# MAGIC   nuts3_2021.LEVEL1_code	,
+# MAGIC   nuts3_2021.LEVEL0_code	,
+# MAGIC   nuts3_2021.NUTS_EU,	
+# MAGIC   nuts3_2021.TAA ,
+# MAGIC
+# MAGIC   SUM(nuts3_2021.AreaHa) as AreaHa,
+# MAGIC   SUM(isric_30.ocs030cm100m)  as SOC_STOCK_isric30cm_t,    --values expressed as t/ha
+# MAGIC
+# MAGIC   lULUCF_2018.LULUCF_CODE,
+# MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil')) as soil_type,
+# MAGIC   env_zones.Category as env_zones
+# MAGIC   
+# MAGIC
+# MAGIC from nuts3_2021
+# MAGIC
+# MAGIC
+# MAGIC LEFT JOIN isric_30     on nuts3_2021.GridNum = isric_30.GridNum
+# MAGIC LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
+# MAGIC LEFT JOIN organic_soil on nuts3_2021.GridNum1km = organic_soil.GridNum  ------ 1km JOIN !!!!!!
+# MAGIC LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
+# MAGIC
+# MAGIC where nuts3_2021.ISO2 ='LU'  and lULUCF_2018.LULUCF_CODE in ('CL','GL','SL','OL')
+# MAGIC
+# MAGIC group by 
+# MAGIC
+# MAGIC   nuts3_2021.Category,
+# MAGIC   ----nuts3_2021.GridNum10km,
+# MAGIC   nuts3_2021.ADM_ID,
+# MAGIC   nuts3_2021.ADM_COUNTRY	,
+# MAGIC   nuts3_2021.ISO2	,
+# MAGIC   nuts3_2021.LEVEL3_name	,
+# MAGIC   nuts3_2021.LEVEL2_name	,
+# MAGIC   nuts3_2021.LEVEL1_name	,
+# MAGIC   nuts3_2021.LEVEL0_name	,
+# MAGIC   nuts3_2021.LEVEL3_code	,
+# MAGIC   nuts3_2021.LEVEL2_code	,
+# MAGIC   nuts3_2021.LEVEL1_code	,
+# MAGIC   nuts3_2021.LEVEL0_code	,
+# MAGIC   nuts3_2021.NUTS_EU,	
+# MAGIC   nuts3_2021.TAA ,
+# MAGIC   lULUCF_2018.LULUCF_CODE,
+# MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC   env_zones.Category ,
+# MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil'))
 
 # COMMAND ----------
 
@@ -591,7 +709,7 @@
 # MAGIC
 # MAGIC   nuts3_2021.Category,
 # MAGIC   
-# MAGIC   ---nuts3_2021.GridNum10km,
+# MAGIC   nuts3_2021.GridNum10km,
 # MAGIC   nuts3_2021.ADM_ID,
 # MAGIC   nuts3_2021.ADM_COUNTRY	,
 # MAGIC   nuts3_2021.ISO2	,
@@ -627,7 +745,7 @@
 # MAGIC group by 
 # MAGIC
 # MAGIC   nuts3_2021.Category,
-# MAGIC   ---nuts3_2021.GridNum10km,
+# MAGIC   nuts3_2021.GridNum10km,
 # MAGIC   nuts3_2021.ADM_ID,
 # MAGIC   nuts3_2021.ADM_COUNTRY	,
 # MAGIC   nuts3_2021.ISO2	,
@@ -663,14 +781,33 @@
 
 # COMMAND ----------
 
+### Reading URL of resulting table: (for downloading to EEA greenmonkey)
+folder ="dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/SOC/SOC_STOCK_2_100cm_nuts3"
+folder_output =folder[29:]
+for file in dbutils.fs.ls(folder):
+    if file.name[-2:] =="gz":
+        print ("Exported file:")
+        print(file.name)
+        print ("Exported URL:")
+        URL = "https://cwsblobstorage01.blob.core.windows.net/cwsblob01"+"/"+folder_output +"/"+file.name
+        print (URL)
+
+# COMMAND ----------
+
 # MAGIC %md #### (2.1.3) DASHBOARD SOC-STOCk (C) Wetland
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from soc_stock_ext_wetland
 
 # COMMAND ----------
 
 # MAGIC %sql
 # MAGIC select
 # MAGIC
-# MAGIC soc_stock_ext_wetland.wetlands_categories as wetland_c_t_per_ha ,* 
+# MAGIC soc_stock_ext_wetland.
+# MAGIC C_stok as wetland_c_t_per_ha ,* 
 # MAGIC from soc_stock_ext_wetland
 # MAGIC
 # MAGIC --From the data and literature analysis, a carbon stock value has been assigned per each Extended Wetland layer class depending on thei geographic location. The data supports the estimation of wetland carbon pool for the definition of wetlands from a LULUCF approach and the second, from an ecosystem perspective.
@@ -705,8 +842,8 @@
 # MAGIC
 # MAGIC ---soc_stock_ext_wetland.wetlands_categories as wetland_c_t_per_ha 
 # MAGIC   SUM(nuts3_2021.AreaHa) as AreaHa,
-# MAGIC   SUM(soc_stock_ext_wetland.wetlands_categories)  as SOC_STOCK_t_ext_wetland,
-# MAGIC  if( CLC_2018.Category in  (411,412,421,422,423 , 511, 512, 521, 522 , 523) ,sum(soc_stock_ext_wetland.wetlands_categories),0) as SOC_STOCK_t_wetland,
+# MAGIC   SUM(soc_stock_ext_wetland.C_stok)  as SOC_STOCK_t_ext_wetland,
+# MAGIC  if( CLC_2018.Category in  (411,412,421,422,423 , 511, 512, 521, 522 , 523) ,sum(soc_stock_ext_wetland.C_stok),0) as SOC_STOCK_t_wetland,
 # MAGIC       --values expressed as t/ha
 # MAGIC
 # MAGIC   lULUCF_2018.LULUCF_CODE,
@@ -724,7 +861,7 @@
 # MAGIC LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
 # MAGIC LEFT JOIN CLC_2018     on nuts3_2021.GridNum = CLC_2018.GridNum
 # MAGIC
-# MAGIC where nuts3_2021.LEVEL3_code is not null and soc_stock_ext_wetland.wetlands_categories >0 ---- only for wetlands
+# MAGIC where nuts3_2021.LEVEL3_code is not null and soc_stock_ext_wetland.C_stok >0 ---- only for wetlands
 # MAGIC
 # MAGIC
 # MAGIC
@@ -772,7 +909,7 @@
 # MAGIC
 # MAGIC   nuts3_2021.Category,
 # MAGIC   
-# MAGIC  --- nuts3_2021.GridNum10km,
+# MAGIC  nuts3_2021.GridNum10km,
 # MAGIC   nuts3_2021.ADM_ID,
 # MAGIC   nuts3_2021.ADM_COUNTRY	,
 # MAGIC   nuts3_2021.ISO2	,
@@ -787,10 +924,10 @@
 # MAGIC   nuts3_2021.NUTS_EU,	
 # MAGIC   nuts3_2021.TAA ,
 # MAGIC CLC_2018.Category as clc18_level3_class,
-# MAGIC ---soc_stock_ext_wetland.wetlands_categories as wetland_c_t_per_ha 
+# MAGIC ---soc_stock_ext_wetland.C_stok as wetland_c_t_per_ha 
 # MAGIC   SUM(nuts3_2021.AreaHa) as AreaHa,
-# MAGIC   SUM(soc_stock_ext_wetland.wetlands_categories)  as SOC_STOCK_t_ext_wetland,
-# MAGIC  if( CLC_2018.Category in  (411,412,421,422,423 , 511, 512, 521, 522 , 523) ,sum(soc_stock_ext_wetland.wetlands_categories),0) as SOC_STOCK_t_wetland,
+# MAGIC   SUM(soc_stock_ext_wetland.C_stok)  as SOC_STOCK_t_ext_wetland,
+# MAGIC  if( CLC_2018.Category in  (411,412,421,422,423 , 511, 512, 521, 522 , 523) ,sum(soc_stock_ext_wetland.C_stok),0) as SOC_STOCK_t_wetland,
 # MAGIC   lULUCF_2018.LULUCF_CODE,
 # MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
 # MAGIC   OrganicSoils,
@@ -805,7 +942,7 @@
 # MAGIC where nuts3_2021.LEVEL3_code is not null and soc_stock_ext_wetland.wetlands_categories >0 ---- only for wetlands
 # MAGIC group by 
 # MAGIC   nuts3_2021.Category,
-# MAGIC   ---nuts3_2021.GridNum10km,
+# MAGIC   nuts3_2021.GridNum10km,
 # MAGIC   nuts3_2021.ADM_ID,
 # MAGIC   nuts3_2021.ADM_COUNTRY	,
 # MAGIC   nuts3_2021.ISO2	,
@@ -838,6 +975,19 @@
 # MAGIC     .option("treatEmptyValuesAsNulls", "true")  
 # MAGIC   
 # MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/SOC/SOC_STOCK_3_wetland_nuts3")
+
+# COMMAND ----------
+
+### Reading URL of resulting table: (for downloading to EEA greenmonkey)
+folder ="dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/SOC/SOC_STOCK_3_wetland_nuts3"
+folder_output =folder[29:]
+for file in dbutils.fs.ls(folder):
+    if file.name[-2:] =="gz":
+        print ("Exported file:")
+        print(file.name)
+        print ("Exported URL:")
+        URL = "https://cwsblobstorage01.blob.core.windows.net/cwsblob01"+"/"+folder_output +"/"+file.name
+        print (URL)
 
 # COMMAND ----------
 
@@ -1092,13 +1242,13 @@
 
 # MAGIC %scala
 # MAGIC
-# MAGIC // set up of new time-series table for SOC flux -based on DayCent
+# MAGIC // set up of new time-series table for SOC flux -based on DayCent NUTS3 
 # MAGIC
 # MAGIC val SOC_FLUX_DAYCENT_spark = spark.sql(""" 
 # MAGIC  
 # MAGIC SELECT 
 # MAGIC   nuts3_2021.Category,
-# MAGIC  --- nuts3_2021.GridNum10km,
+# MAGIC   -----nuts3_2021.GridNum10km,
 # MAGIC   nuts3_2021.ADM_ID,
 # MAGIC   nuts3_2021.ADM_COUNTRY	,
 # MAGIC   nuts3_2021.ISO2	,
@@ -1203,7 +1353,7 @@
 # MAGIC
 # MAGIC group by 
 # MAGIC   nuts3_2021.Category,
-# MAGIC  --- nuts3_2021.GridNum10km,
+# MAGIC   ---nuts3_2021.GridNum10km,
 # MAGIC   nuts3_2021.ADM_ID,
 # MAGIC   nuts3_2021.ADM_COUNTRY	,
 # MAGIC   nuts3_2021.ISO2	,
@@ -1253,7 +1403,9 @@ df = sql_for_panda.select("*").toPandas()
 
 #df_transformed =df.melt(id_vars=['Category',	'GridNum10km',	'ADM_ID',	'ADM_COUNTRY',	'ISO2',	'LEVEL3_name',	'LEVEL2_name',	'LEVEL1_name',	'LEVEL0_name',	'LEVEL3_code',	'LEVEL2_code',	'LEVEL1_code',	'LEVEL0_code',	'NUTS_EU',	'TAA',	'LULUCF_CODE',	'LULUCF_DESCRIPTION',	'soil_type',	'env_zones', ], var_name="year", value_name="soc")
 
-df_transformed =df.melt(id_vars=['Category','ADM_ID',	'ADM_COUNTRY',	'ISO2',	'LEVEL3_name',	'LEVEL2_name',	'LEVEL1_name',	'LEVEL0_name',	'LEVEL3_code',	'LEVEL2_code',	'LEVEL1_code',	'LEVEL0_code',	'NUTS_EU',	'TAA',	'LULUCF_CODE',	'LULUCF_DESCRIPTION',	'soil_type',	'env_zones', 'AreaHa'], var_name="year", value_name="soc")
+df_transformed =df.melt(id_vars=['GridNum10km',	'ADM_COUNTRY',	'ISO2', 'LEVEL3_code',	'TAA',	'LULUCF_CODE',	'soil_type',	'env_zones', ], var_name="year", value_name="soc")
+
+#df_transformed =df.melt(id_vars=['Category','ADM_ID',	'ADM_COUNTRY',	'ISO2',	'LEVEL3_name',	'LEVEL2_name',	'LEVEL1_name',	'LEVEL0_name',	'LEVEL3_code',	'LEVEL2_code',	'LEVEL1_code',	'LEVEL0_code',	'NUTS_EU',	'TAA',	'LULUCF_CODE',	'LULUCF_DESCRIPTION',	'soil_type',	'env_zones', 'AreaHa'], var_name="year", value_name="soc")
 
 
 
@@ -1286,6 +1438,20 @@ df_transformed
 # MAGIC     .option("treatEmptyValuesAsNulls", "true")  
 # MAGIC     
 # MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/SOC/SOC_FLUX1_daycent")
+
+# COMMAND ----------
+
+### Reading URL of resulting table: (for downloading to EEA greenmonkey)
+folder ="dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/SOC/SOC_FLUX1_daycent"
+folder_output =folder[29:]
+for file in dbutils.fs.ls(folder):
+    if file.name[-2:] =="gz":
+        print ("Exported file:")
+        print(file.name)
+        print ("Exported URL:")
+        URL = "https://cwsblobstorage01.blob.core.windows.net/cwsblob01"+"/"+folder_output +"/"+file.name
+        print (URL)
+    
 
 # COMMAND ----------
 
@@ -1340,6 +1506,9 @@ df_transformed
 # MAGIC
 # MAGIC   SUM(nuts3_2021.AreaHa) as AreaHa,
 # MAGIC   SUM(AGB_2018.esacciagb2018)  as esacciagb2018,        -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
+# MAGIC
+# MAGIC   SUM(AGB_2018.esacciagb2018 *0.45)  as gpp_esacciagb2018,   ---- GPP = 45% of GDMP 
+# MAGIC
 # MAGIC   SUM(AGB_2018.esacciagbsd2018)  as esacciagbsd2018,    -- per-pixel estimates of above-ground biomass uncertainty expressed as the standard deviation in Mg/ha (raster dataset)
 # MAGIC
 # MAGIC
@@ -1404,7 +1573,7 @@ df_transformed
 # MAGIC         
 # MAGIC         nuts3_2021.Category, ----FOR ADMIN
 # MAGIC         
-# MAGIC         ----nuts3_2021.GridNum10km,
+# MAGIC         nuts3_2021.GridNum10km,
 # MAGIC         nuts3_2021.ADM_ID,
 # MAGIC         nuts3_2021.ADM_COUNTRY	,
 # MAGIC         nuts3_2021.ISO2	,
@@ -1427,6 +1596,7 @@ df_transformed
 # MAGIC
 # MAGIC         SUM(nuts3_2021.AreaHa) as AreaHa,
 # MAGIC         SUM(AGB_2018.esacciagb2018)  as esacciagb2018,        -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
+# MAGIC           SUM(AGB_2018.esacciagb2018 *0.45)  as gpp_esacciagb2018,   ---- GPP = 45% of GDMP 
 # MAGIC         SUM(AGB_2018.esacciagbsd2018)  as esacciagbsd2018,    -- per-pixel estimates of above-ground biomass uncertainty expressed as the standard deviation in Mg/ha (raster dataset)
 # MAGIC
 # MAGIC
@@ -1453,7 +1623,7 @@ df_transformed
 # MAGIC       group by 
 # MAGIC
 # MAGIC         nuts3_2021.Category,
-# MAGIC         ----nuts3_2021.GridNum10km,
+# MAGIC         nuts3_2021.GridNum10km,
 # MAGIC         nuts3_2021.ADM_ID,
 # MAGIC         nuts3_2021.ADM_COUNTRY	,
 # MAGIC         nuts3_2021.ISO2	,
@@ -1481,6 +1651,8 @@ df_transformed
 # MAGIC
 # MAGIC
 # MAGIC """)
+# MAGIC
+# MAGIC
 # MAGIC tableDF_export_db_nuts3_agb1
 # MAGIC     .coalesce(1) //be careful with this
 # MAGIC     .write.format("com.databricks.spark.csv")
@@ -1493,6 +1665,23 @@ df_transformed
 # MAGIC     .option("treatEmptyValuesAsNulls", "true")  
 # MAGIC     
 # MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/AGB/AGB_STOCK1_ESA_CCI2018")
+
+# COMMAND ----------
+
+
+### Reading URL of resulting table: (for downloading to EEA greenmonkey)
+folder ="dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/AGB/AGB_STOCK1_ESA_CCI2018"
+folder_output =folder[29:]
+for file in dbutils.fs.ls(folder):
+    if file.name[-2:] =="gz":
+        print ("Exported file:")
+        print(file.name)
+        print ("Exported URL:")
+        URL = "https://cwsblobstorage01.blob.core.windows.net/cwsblob01"+"/"+folder_output +"/"+file.name
+        print (URL)
+    
+
+
 
 # COMMAND ----------
 
@@ -1854,3 +2043,143 @@ group by
 gridnum & cast(-65536 as bigint) 
 ,Natura2000_net, 
 gridnum & cast(- 4294967296 as bigint)
+
+# COMMAND ----------
+
+# MAGIC %md ###  Get resulting URL for download:
+
+# COMMAND ----------
+
+### Reading URL of resulting table: (for downloading to EEA greenmonkey)
+folder ="dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/AGB/AGB_STOCK1_ESA_CCI2018"
+folder_output =folder[29:]
+for file in dbutils.fs.ls(folder):
+    if file.name[-2:] =="gz":
+        print ("Exported file:")
+        print(file.name)
+        print ("Exported URL:")
+        URL = "https://cwsblobstorage01.blob.core.windows.net/cwsblob01"+"/"+folder_output +"/"+file.name
+        print (URL)
+    
+
+# COMMAND ----------
+
+# MAGIC %md ###  union three tables
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC /****** Script for SelectTopNRows command from SSMS  ******/
+# MAGIC
+# MAGIC drop table if exists  [Carbon_Mapping].[carbon_mapping].[soc_stock_A_30cm]
+# MAGIC go
+# MAGIC SELECT [Category]
+# MAGIC       ,[GridNum10km]
+# MAGIC       ,[ADM_ID]
+# MAGIC       ,[ADM_COUNTRY]
+# MAGIC       ,[ISO2]
+# MAGIC       ,[LEVEL3_name]
+# MAGIC       ,[LEVEL2_name]
+# MAGIC       ,[LEVEL1_name]
+# MAGIC       ,[LEVEL0_name]
+# MAGIC       ,[LEVEL3_code]
+# MAGIC       ,[LEVEL2_code]
+# MAGIC       ,[LEVEL1_code]
+# MAGIC       ,[LEVEL0_code]
+# MAGIC       ,[NUTS_EU]
+# MAGIC       ,[TAA]
+# MAGIC       ,[LULUCF_CODE]
+# MAGIC       ,[LULUCF_DESCRIPTION]
+# MAGIC       ,[soil_type]
+# MAGIC       ,[env_zones]
+# MAGIC
+# MAGIC 	  ,[AreaHa]
+# MAGIC       ,[SOC_STOCK_isric30cm_t]
+# MAGIC 	  ,NULL as [SOC_STOCK_isric100cm_t]
+# MAGIC 		,NULL as	[clc18_level3_class]
+# MAGIC 		,NULL as 	[SOC_STOCK_t_ext_wetland]
+# MAGIC 		,NULL as	[SOC_STOCK_t_wetland]
+# MAGIC
+# MAGIC into [Carbon_Mapping].[carbon_mapping].[soc_stock_A_30cm]
+# MAGIC   FROM [Carbon_Mapping].[carbon_mapping].[soc_stock_A_isric30cm]
+# MAGIC   go
+# MAGIC
+# MAGIC   
+# MAGIC drop table if exists  [Carbon_Mapping].[carbon_mapping].[soc_stock_B_100cm]
+# MAGIC go
+# MAGIC
+# MAGIC   Select 
+# MAGIC
+# MAGIC    [Category]
+# MAGIC       ,[GridNum10km]
+# MAGIC       ,[ADM_ID]
+# MAGIC       ,[ADM_COUNTRY]
+# MAGIC       ,[ISO2]
+# MAGIC       ,[LEVEL3_name]
+# MAGIC       ,[LEVEL2_name]
+# MAGIC       ,[LEVEL1_name]
+# MAGIC       ,[LEVEL0_name]
+# MAGIC       ,[LEVEL3_code]
+# MAGIC       ,[LEVEL2_code]
+# MAGIC       ,[LEVEL1_code]
+# MAGIC       ,[LEVEL0_code]
+# MAGIC       ,[NUTS_EU]
+# MAGIC       ,[TAA]
+# MAGIC       ,[LULUCF_CODE]
+# MAGIC       ,[LULUCF_DESCRIPTION]
+# MAGIC       ,[soil_type]
+# MAGIC       ,[env_zones]
+# MAGIC
+# MAGIC 	  ,[AreaHa]
+# MAGIC       ,NULL as  [SOC_STOCK_isric30cm_t]
+# MAGIC 	  ,[SOC_STOCK_isric100cm_t]
+# MAGIC 		,NULL as	[clc18_level3_class]
+# MAGIC 		,NULL as 	[SOC_STOCK_t_ext_wetland]
+# MAGIC 		,NULL as	[SOC_STOCK_t_wetland]
+# MAGIC 		into [Carbon_Mapping].[carbon_mapping].[soc_stock_B_100cm]
+# MAGIC 		from  [carbon_mapping].[soc_stock_B_isric100cm_forest]
+# MAGIC   go
+# MAGIC
+# MAGIC   
+# MAGIC drop table if exists  [Carbon_Mapping].[carbon_mapping].[soc_stock_C_wetland]
+# MAGIC go
+# MAGIC   Select 
+# MAGIC
+# MAGIC    [Category]
+# MAGIC       ,[GridNum10km]
+# MAGIC       ,[ADM_ID]
+# MAGIC       ,[ADM_COUNTRY]
+# MAGIC       ,[ISO2]
+# MAGIC       ,[LEVEL3_name]
+# MAGIC       ,[LEVEL2_name]
+# MAGIC       ,[LEVEL1_name]
+# MAGIC       ,[LEVEL0_name]
+# MAGIC       ,[LEVEL3_code]
+# MAGIC       ,[LEVEL2_code]
+# MAGIC       ,[LEVEL1_code]
+# MAGIC       ,[LEVEL0_code]
+# MAGIC       ,[NUTS_EU]
+# MAGIC       ,[TAA]
+# MAGIC       ,[LULUCF_CODE]
+# MAGIC       ,[LULUCF_DESCRIPTION]
+# MAGIC       ,[soil_type]
+# MAGIC       ,[env_zones]
+# MAGIC
+# MAGIC 	  ,[AreaHa]
+# MAGIC       ,NULL as  [SOC_STOCK_isric30cm_t]
+# MAGIC 	  ,NULL as[SOC_STOCK_isric100cm_t]
+# MAGIC 		,[clc18_level3_class]
+# MAGIC 		,	[SOC_STOCK_t_ext_wetland]
+# MAGIC 		,[SOC_STOCK_t_wetland]
+# MAGIC
+# MAGIC 		into [Carbon_Mapping].[carbon_mapping].[soc_stock_C_wetland]
+# MAGIC 		from  [carbon_mapping].[soc_stock_C_wetland_tab]
+# MAGIC
+# MAGIC go
+# MAGIC
+# MAGIC SELECT * 
+# MAGIC FROM [Carbon_Mapping].[carbon_mapping].[soc_stock_A_30cm]
+# MAGIC UNION ALL
+# MAGIC SELECT * FROM [Carbon_Mapping].[carbon_mapping].[soc_stock_B_100cm]
+# MAGIC UNION ALL
+# MAGIC SELECT * FROM [Carbon_Mapping].[carbon_mapping].[soc_stock_C_wetland]
