@@ -949,7 +949,7 @@ for file in dbutils.fs.ls(folder):
 
 # COMMAND ----------
 
-# MAGIC %md #### (2.1.4) DASHBOARD SOC-STOCk combine all single SOC tables (under construction)
+# MAGIC %md #### (2.1.4) DASHBOARD SOC-STOCk combine all single SOC tables 
 
 # COMMAND ----------
 

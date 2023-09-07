@@ -2433,7 +2433,7 @@ for file in dbutils.fs.ls(folder):
 
 # COMMAND ----------
 
-# MAGIC %md ## 4 Join Data (Approach 2 - by pixel by pixel)
+# MAGIC %md ## 4 Join Data (Approach 2 - by pixel by pixel)  --- BEST Approach!!
 # MAGIC
 # MAGIC Here we first try to connect everything, and then select the corresponding GDMP values for pixels with fire. And only then to work out the statistics for the reference areas.
 
@@ -2779,6 +2779,185 @@ for file in dbutils.fs.ls(folder):
 # MAGIC
 # MAGIC
 # MAGIC
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT 
+# MAGIC
+# MAGIC       fire_year.GridNum10km,
+# MAGIC     
+# MAGIC       nuts3_2021.ADM_ID,
+# MAGIC       nuts3_2021.ISO2,
+# MAGIC       maes_sq1.MAES_CODE,
+# MAGIC       ----PA2022.protected_area,
+# MAGIC       EnvZones.Category as env_zones,
+# MAGIC
+# MAGIC       SUM(fire_year.AreaHa) as Fire_area_ha,
+# MAGIC     
+# MAGIC       SUM(fire_2014) as fire_2014,
+# MAGIC       SUM(fire_2015) as fire_2015,
+# MAGIC       SUM(fire_2016) as fire_2016,
+# MAGIC       SUM(fire_2017) as fire_2017,
+# MAGIC       SUM(fire_2018) as fire_2018,
+# MAGIC       SUM(fire_2019) as fire_2019,
+# MAGIC       SUM(fire_2020) as fire_2020,
+# MAGIC       SUM(fire_2021) as fire_2021,
+# MAGIC       SUM(fire_2022) as fire_2022,
+# MAGIC
+# MAGIC       SUM(GDMP_2014) as GDMP_2014,
+# MAGIC       SUM(GDMP_2015) as GDMP_2015,
+# MAGIC       SUM(GDMP_2016) as GDMP_2016,
+# MAGIC       SUM(GDMP_2017) as GDMP_2017,
+# MAGIC       SUM(GDMP_2018) as GDMP_2018,
+# MAGIC       SUM(GDMP_2019) as GDMP_2019,
+# MAGIC       SUM(GDMP_2020) as GDMP_2020,
+# MAGIC       SUM(GDMP_2021) as GDMP_2021,
+# MAGIC       SUM(GDMP_2022) as GDMP_2022,
+# MAGIC
+# MAGIC       AVG(GDMP_100m_anom_2014) as GDMP_100m_anom_2014,
+# MAGIC       AVG(GDMP_100m_anom_2015) as GDMP_100m_anom_2015,
+# MAGIC       AVG(GDMP_100m_anom_2016) as GDMP_100m_anom_2016,
+# MAGIC       AVG(GDMP_100m_anom_2017) as GDMP_100m_anom_2017,
+# MAGIC       AVG(GDMP_100m_anom_2018) as GDMP_100m_anom_2018,
+# MAGIC       AVG(GDMP_100m_anom_2019) as GDMP_100m_anom_2019,
+# MAGIC       AVG(GDMP_100m_anom_2020) as GDMP_100m_anom_2020,
+# MAGIC       AVG(GDMP_100m_anom_2021) as GDMP_100m_anom_2021,
+# MAGIC       AVG(GDMP_100m_anom_2022) as GDMP_100m_anom_2022
+# MAGIC
+# MAGIC  FROM fire_year 
+# MAGIC
+# MAGIC   LEFT JOIN maes_sq1        ON fire_year.GridNum = maes_sq1.GridNum
+# MAGIC   LEFT JOIN EnvZones        ON fire_year.GridNum = EnvZones.GridNum
+# MAGIC   LEFT JOIN nuts3_2021      ON fire_year.GridNum = nuts3_2021.GridNum    
+# MAGIC
+# MAGIC   LEFT JOIN PA2022                ON fire_year.GridNum = PA2022.GridNum  
+# MAGIC   LEFT JOIN GDMP_100m_14_22       ON fire_year.GridNum = GDMP_100m_14_22.GridNum 
+# MAGIC   LEFT JOIN GDMP_100m_statistics  ON fire_year.GridNum = GDMP_100m_statistics.GridNum 
+# MAGIC
+# MAGIC -----where nuts3_2021.ISO2 ='PT' and nuts3_2021.GridNum = 5122646148644864
+# MAGIC ---where nuts3_2021.GridNum10km =13854422035595264
+# MAGIC
+# MAGIC
+# MAGIC GROUP BY 
+# MAGIC
+# MAGIC fire_year.GridNum10km,
+# MAGIC       nuts3_2021.ADM_ID,
+# MAGIC       nuts3_2021.ISO2,
+# MAGIC       maes_sq1.MAES_CODE,
+# MAGIC       EnvZones.Category
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+# MAGIC %md ### 4.2 Pixel by Pixel CUBE
+
+# COMMAND ----------
+
+# MAGIC %scala
+# MAGIC //// CUBE: wild-fire pixel with GDMP 100m
+# MAGIC
+# MAGIC val fire_gdmp100_pixel_cube = spark.sql(""" 
+# MAGIC
+# MAGIC SELECT 
+# MAGIC
+# MAGIC       fire_year.GridNum10km,
+# MAGIC     
+# MAGIC       nuts3_2021.ADM_ID,
+# MAGIC       nuts3_2021.ISO2,
+# MAGIC       maes_sq1.MAES_CODE,
+# MAGIC       ----PA2022.protected_area,
+# MAGIC       EnvZones.Category as env_zones,
+# MAGIC
+# MAGIC       SUM(fire_year.AreaHa) as Fire_area_ha,
+# MAGIC     
+# MAGIC       SUM(fire_2014) as fire_2014,
+# MAGIC       SUM(fire_2015) as fire_2015,
+# MAGIC       SUM(fire_2016) as fire_2016,
+# MAGIC       SUM(fire_2017) as fire_2017,
+# MAGIC       SUM(fire_2018) as fire_2018,
+# MAGIC       SUM(fire_2019) as fire_2019,
+# MAGIC       SUM(fire_2020) as fire_2020,
+# MAGIC       SUM(fire_2021) as fire_2021,
+# MAGIC       SUM(fire_2022) as fire_2022,
+# MAGIC
+# MAGIC       SUM(GDMP_2014) as GDMP_2014,
+# MAGIC       SUM(GDMP_2015) as GDMP_2015,
+# MAGIC       SUM(GDMP_2016) as GDMP_2016,
+# MAGIC       SUM(GDMP_2017) as GDMP_2017,
+# MAGIC       SUM(GDMP_2018) as GDMP_2018,
+# MAGIC       SUM(GDMP_2019) as GDMP_2019,
+# MAGIC       SUM(GDMP_2020) as GDMP_2020,
+# MAGIC       SUM(GDMP_2021) as GDMP_2021,
+# MAGIC       SUM(GDMP_2022) as GDMP_2022,
+# MAGIC
+# MAGIC       AVG(GDMP_100m_anom_2014) as GDMP_100m_anom_2014,
+# MAGIC       AVG(GDMP_100m_anom_2015) as GDMP_100m_anom_2015,
+# MAGIC       AVG(GDMP_100m_anom_2016) as GDMP_100m_anom_2016,
+# MAGIC       AVG(GDMP_100m_anom_2017) as GDMP_100m_anom_2017,
+# MAGIC       AVG(GDMP_100m_anom_2018) as GDMP_100m_anom_2018,
+# MAGIC       AVG(GDMP_100m_anom_2019) as GDMP_100m_anom_2019,
+# MAGIC       AVG(GDMP_100m_anom_2020) as GDMP_100m_anom_2020,
+# MAGIC       AVG(GDMP_100m_anom_2021) as GDMP_100m_anom_2021,
+# MAGIC       AVG(GDMP_100m_anom_2022) as GDMP_100m_anom_2022
+# MAGIC
+# MAGIC  FROM fire_year 
+# MAGIC
+# MAGIC   LEFT JOIN maes_sq1        ON fire_year.GridNum = maes_sq1.GridNum
+# MAGIC   LEFT JOIN EnvZones        ON fire_year.GridNum = EnvZones.GridNum
+# MAGIC   LEFT JOIN nuts3_2021      ON fire_year.GridNum = nuts3_2021.GridNum    
+# MAGIC
+# MAGIC   LEFT JOIN PA2022                ON fire_year.GridNum = PA2022.GridNum  
+# MAGIC   LEFT JOIN GDMP_100m_14_22       ON fire_year.GridNum = GDMP_100m_14_22.GridNum 
+# MAGIC   LEFT JOIN GDMP_100m_statistics  ON fire_year.GridNum = GDMP_100m_statistics.GridNum 
+# MAGIC
+# MAGIC -----where nuts3_2021.ISO2 ='PT' and nuts3_2021.GridNum = 5122646148644864
+# MAGIC ---where nuts3_2021.GridNum10km =13854422035595264
+# MAGIC GROUP BY 
+# MAGIC       fire_year.GridNum10km,
+# MAGIC       nuts3_2021.ADM_ID,
+# MAGIC       nuts3_2021.ISO2,
+# MAGIC       maes_sq1.MAES_CODE,
+# MAGIC       EnvZones.Category
+# MAGIC
+# MAGIC    """)
+# MAGIC
+# MAGIC fire_gdmp100_pixel_cube.createOrReplaceTempView("fire_gdmp100_pixel_cube")
+# MAGIC
+# MAGIC
+# MAGIC // Exporting the final table
+# MAGIC
+# MAGIC //approach_2_test_cube.write.parquet("dbfs:/mnt/trainingDatabricks/ExportTable/wildfires/test_cube_approach2.parquet")
+# MAGIC fire_gdmp100_pixel_cube
+# MAGIC     .coalesce(1) //be careful with this
+# MAGIC     .write.format("com.databricks.spark.csv")
+# MAGIC     .mode(SaveMode.Overwrite)
+# MAGIC     .option("sep","|")
+# MAGIC     .option("overwriteSchema", "true")
+# MAGIC     .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+# MAGIC     .option("emptyValue", "")
+# MAGIC     .option("header","true")
+# MAGIC     .option("treatEmptyValuesAsNulls", "true")  
+# MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/wildfires/fire_gdmp100_pixel_cube")
+# MAGIC
+# MAGIC
+
+# COMMAND ----------
+
+##///### Reading URL of resulting table: (for downloading to EEA greenmonkey)
+folder =("dbfs:/mnt/trainingDatabricks/ExportTable/wildfires/fire_gdmp100_pixel_cube")
+
+folder_output =folder[29:]
+for file in dbutils.fs.ls(folder):
+    if file.name[-2:] =="gz":
+        #print ("Exported file:")
+        #print(file.name)
+        #print ("Exported URL:")
+        URL = "https://cwsblobstorage01.blob.core.windows.net/cwsblob01"+"/"+folder_output +"/"+file.name
+        print (URL)
 
 # COMMAND ----------
 

@@ -26,7 +26,7 @@
 
 -- COMMAND ----------
 
-
+select * 
 
 -- COMMAND ----------
 

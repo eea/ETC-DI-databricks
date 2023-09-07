@@ -1,8 +1,21 @@
 # Databricks notebook source
-# MAGIC %md # European Droughtindex Notebook
+# MAGIC %md # European Drought Index Notebook
 # MAGIC
 # MAGIC
 # MAGIC by Manuel
+# MAGIC
+# MAGIC
+# MAGIC Aim:
+# MAGIC The SQL query under L:\drought_indicator\scripts\sql\AreaAggregate reads the F table "[Climate_Impact].[drought].[F_DroughtImpact2022]" which contains the SM (soil moisture) and LINT timer series. 
+# MAGIC
+# MAGIC Id like to replace the LINT time series in this query with the new GDMP time series, which combines the 300m and the 1km time series.
+# MAGIC
+# MAGIC https://eea1.sharepoint.com/:u:/r/teams/-EXT-ETCDI/Shared%20Documents/3.2.2%20Drought%20and%20fire%20impact%20on%20C-%20Em%20and%20rem/drought_and_fire_workflow-%20overview.vsdx?d=wd52733c0b652416e99d66c43fe59df67&csf=1&web=1&e=kXY90N
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC ![](https://upload.wikimedia.org/wikipedia/commons/thumb/d/d3/California_Drought_Dry_Lakebed_2009.jpg/157px-California_Drought_Dry_Lakebed_2009.jpg)
+# MAGIC
 # MAGIC
 
 # COMMAND ----------
@@ -487,4 +500,77 @@
 # MAGIC val drop_parquetFileDF_Drought_Indicators_2022 = parquetFileDF_Drought_Indicators_2022.dropDuplicates("gridnum")
 # MAGIC //dropDisDF_ADMIN.show(false)
 # MAGIC drop_parquetFileDF_Drought_Indicators_2022.createOrReplaceTempView("Drought_indicator")
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %md ## 2) QC of the uploaded DIMs
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT * from Drought_indicator
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %sql 
+# MAGIC
+# MAGIC SHOW COLUMNS IN Drought_indicator 
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC ---- testing 
+# MAGIC Select
+# MAGIC
+# MAGIC  SUM(IF( coalesce(sma_gs_avg_2000,0) < -0.5 AND coalesce(LINT_anom_2000,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2000
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2001,0) < -0.5 AND coalesce(LINT_anom_2001,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2001
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2002,0) < -0.5 AND coalesce(LINT_anom_2002,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2002
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2003,0) < -0.5 AND coalesce(LINT_anom_2003,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2003
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2004,0) < -0.5 AND coalesce(LINT_anom_2004,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2004
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2005,0) < -0.5 AND coalesce(LINT_anom_2005,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2005
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2006,0) < -0.5 AND coalesce(LINT_anom_2006,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2006
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2007,0) < -0.5 AND coalesce(LINT_anom_2007,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2007
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2008,0) < -0.5 AND coalesce(LINT_anom_2008,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2008
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2009,0) < -0.5 AND coalesce(LINT_anom_2009,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2009
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2010,0) < -0.5 AND coalesce(LINT_anom_2010,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2010
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2011,0) < -0.5 AND coalesce(LINT_anom_2011,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2011
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2012,0) < -0.5 AND coalesce(LINT_anom_2012,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2012
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2013,0) < -0.5 AND coalesce(LINT_anom_2013,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2013
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2014,0) < -0.5 AND coalesce(LINT_anom_2014,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2014
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2015,0) < -0.5 AND coalesce(LINT_anom_2015,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2015
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2016,0) < -0.5 AND coalesce(LINT_anom_2016,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2016
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2017,0) < -0.5 AND coalesce(LINT_anom_2017,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2017
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2018,0) < -0.5 AND coalesce(LINT_anom_2018,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2018
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2019,0) < -0.5 AND coalesce(LINT_anom_2019,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2019
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2020,0) < -0.5 AND coalesce(LINT_anom_2020,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2020
+# MAGIC  ,SUM(IF( coalesce(sma_gs_avg_2021,0) < -0.5 AND coalesce(LINT_anom_2021,0) <-0.5 ,  AreaHa/200,   0 )) as criteria_1_sum_2021
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC from Drought_indicator
+
+# COMMAND ----------
+
+# MAGIC %md ## 3) Construction of CUBES
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+# MAGIC %md ## ANNEX Tools
+
+# COMMAND ----------
+
+# MAGIC %md ### ANNEX (A.1) Print alls columns:
+
+# COMMAND ----------
+
+# MAGIC %sql 
+# MAGIC
+# MAGIC SHOW COLUMNS IN AGB_STOCK2_CL_GDMP_1km_2018;
 # MAGIC
