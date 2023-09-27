@@ -3,7 +3,10 @@
 
 # COMMAND ----------
 
-
+# MAGIC %md
+# MAGIC
+# MAGIC ![](...images/AGB_time_series.png?raw=true)
+# MAGIC
 
 # COMMAND ----------
 
@@ -285,45 +288,44 @@
 
 # MAGIC %sql
 # MAGIC
-# MAGIC
-# MAGIC SELECT 
-# MAGIC   nuts3_2021.Category, ----FOR ADMIN
-# MAGIC   nuts3_2021.GridNum10km,
-# MAGIC   nuts3_2021.ADM_ID,
-# MAGIC   nuts3_2021.ADM_COUNTRY	,
-# MAGIC   nuts3_2021.ISO2	,
-# MAGIC   nuts3_2021.LEVEL3_name	,
-# MAGIC   nuts3_2021.LEVEL2_name	,
-# MAGIC   nuts3_2021.LEVEL1_name	,
-# MAGIC   nuts3_2021.LEVEL0_name	,
-# MAGIC   nuts3_2021.LEVEL3_code	,
-# MAGIC   nuts3_2021.LEVEL2_code	,
-# MAGIC   nuts3_2021.LEVEL1_code	,
-# MAGIC   nuts3_2021.LEVEL0_code	,
-# MAGIC   nuts3_2021.NUTS_EU,	
-# MAGIC   nuts3_2021.TAA ,
-# MAGIC   lULUCF_2018.LULUCF_CODE,
-# MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
-# MAGIC   nuts3_2021.AreaHa,
-# MAGIC
-# MAGIC   natura2000_protection,
-# MAGIC
-# MAGIC   AGB_2010.esacci2010_etrs89 as esacciagb2010,-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
-# MAGIC   AGB_2017.esacci_2017_NN_100m as esacciagb2017,-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
-# MAGIC   AGB_2018.esacciagb2018, -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
-# MAGIC   AGB_2020.ESA_CCI_AGB_2020 as esacciagb2020,-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
-# MAGIC 'ESA CCI AGB' as datasource --- info
-# MAGIC
-# MAGIC from nuts3_2021
-# MAGIC
-# MAGIC LEFT JOIN AGB_2010     on nuts3_2021.GridNum = AGB_2010.gridnum
-# MAGIC LEFT JOIN AGB_2017     on nuts3_2021.GridNum = AGB_2017.gridnum
-# MAGIC LEFT JOIN AGB_2018     on nuts3_2021.GridNum = AGB_2018.gridnum
-# MAGIC LEFT JOIN AGB_2020     on nuts3_2021.GridNum = AGB_2020.gridnum
-# MAGIC
-# MAGIC LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
-# MAGIC LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
-# MAGIC where  nuts3_2021.LEVEL3_code is not null  
+# MAGIC ---SELECT 
+# MAGIC ---  nuts3_2021.Category, ----FOR ADMIN
+# MAGIC ---  nuts3_2021.GridNum10km,
+# MAGIC ---  nuts3_2021.ADM_ID,
+# MAGIC ---  nuts3_2021.ADM_COUNTRY	,
+# MAGIC ---  nuts3_2021.ISO2	,
+# MAGIC ---  nuts3_2021.LEVEL3_name	,
+# MAGIC ---  nuts3_2021.LEVEL2_name	,
+# MAGIC ---  nuts3_2021.LEVEL1_name	,
+# MAGIC ---  nuts3_2021.LEVEL0_name	,
+# MAGIC ---  nuts3_2021.LEVEL3_code	,
+# MAGIC ---  nuts3_2021.LEVEL2_code	,
+# MAGIC ---  nuts3_2021.LEVEL1_code	,
+# MAGIC ---  nuts3_2021.LEVEL0_code	,
+# MAGIC ---  nuts3_2021.NUTS_EU,	
+# MAGIC ---  nuts3_2021.TAA ,
+# MAGIC ---  lULUCF_2018.LULUCF_CODE,
+# MAGIC ---  lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC ---  nuts3_2021.AreaHa,
+# MAGIC ---
+# MAGIC ---  natura2000_protection,
+# MAGIC ---
+# MAGIC ---  AGB_2010.esacci2010_etrs89 as esacciagb2010,-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
+# MAGIC ---  AGB_2017.esacci_2017_NN_100m as esacciagb2017,-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
+# MAGIC ---  AGB_2018.esacciagb2018, -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
+# MAGIC ---  AGB_2020.ESA_CCI_AGB_2020 as esacciagb2020,-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
+# MAGIC ---'ESA CCI AGB' as datasource --- info
+# MAGIC ---
+# MAGIC ---from nuts3_2021
+# MAGIC ---
+# MAGIC ---LEFT JOIN AGB_2010     on nuts3_2021.GridNum = AGB_2010.gridnum
+# MAGIC ---LEFT JOIN AGB_2017     on nuts3_2021.GridNum = AGB_2017.gridnum
+# MAGIC ---LEFT JOIN AGB_2018     on nuts3_2021.GridNum = AGB_2018.gridnum
+# MAGIC ---LEFT JOIN AGB_2020     on nuts3_2021.GridNum = AGB_2020.gridnum
+# MAGIC ---
+# MAGIC ---LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
+# MAGIC ---LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
+# MAGIC ---where  nuts3_2021.LEVEL3_code is not null  
 # MAGIC
 # MAGIC
 # MAGIC
@@ -335,32 +337,18 @@
 # MAGIC // the following script produce a tabel with the name: [AESA_CCI_CUBE]
 # MAGIC val ESA_CCI_CUBE = spark.sql("""
 # MAGIC     SELECT 
-# MAGIC   nuts3_2021.Category, ----FOR ADMIN
 # MAGIC   nuts3_2021.GridNum10km,
-# MAGIC   nuts3_2021.ADM_ID,
-# MAGIC   nuts3_2021.ADM_COUNTRY	,
 # MAGIC   nuts3_2021.ISO2	,
-# MAGIC   nuts3_2021.LEVEL3_name	,
-# MAGIC   nuts3_2021.LEVEL2_name	,
-# MAGIC   nuts3_2021.LEVEL1_name	,
-# MAGIC   nuts3_2021.LEVEL0_name	,
 # MAGIC   nuts3_2021.LEVEL3_code	,
-# MAGIC   nuts3_2021.LEVEL2_code	,
-# MAGIC   nuts3_2021.LEVEL1_code	,
-# MAGIC   nuts3_2021.LEVEL0_code	,
-# MAGIC   nuts3_2021.NUTS_EU,	
 # MAGIC   nuts3_2021.TAA ,
 # MAGIC   lULUCF_2018.LULUCF_CODE,
-# MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
-# MAGIC   nuts3_2021.AreaHa,
 # MAGIC
-# MAGIC   natura2000_protection,
+# MAGIC   SUM(nuts3_2021.AreaHa) as AreaHa,
+# MAGIC   SUM(AGB_2010.esacci2010_etrs89) as esacciagb2010,-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
+# MAGIC   SUM(AGB_2017.esacci_2017_NN_100m) as esacciagb2017,-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
+# MAGIC   SUM(AGB_2018.esacciagb2018), -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
+# MAGIC   SUM(AGB_2020.ESA_CCI_AGB_2020) as esacciagb2020-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
 # MAGIC
-# MAGIC   AGB_2010.esacci2010_etrs89 as esacciagb2010,-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
-# MAGIC   AGB_2017.esacci_2017_NN_100m as esacciagb2017,-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
-# MAGIC   AGB_2018.esacciagb2018, -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
-# MAGIC   AGB_2020.ESA_CCI_AGB_2020 as esacciagb2020,-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
-# MAGIC 'ESA CCI AGB' as datasource --- info
 # MAGIC
 # MAGIC from nuts3_2021
 # MAGIC
@@ -368,22 +356,42 @@
 # MAGIC LEFT JOIN AGB_2017     on nuts3_2021.GridNum = AGB_2017.gridnum
 # MAGIC LEFT JOIN AGB_2018     on nuts3_2021.GridNum = AGB_2018.gridnum
 # MAGIC LEFT JOIN AGB_2020     on nuts3_2021.GridNum = AGB_2020.gridnum
-# MAGIC
 # MAGIC LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
-# MAGIC LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
+# MAGIC
 # MAGIC where  nuts3_2021.LEVEL3_code is not null  
+# MAGIC
+# MAGIC group by 
+# MAGIC   nuts3_2021.GridNum10km,
+# MAGIC   nuts3_2021.ISO2	,
+# MAGIC   nuts3_2021.LEVEL3_code	,
+# MAGIC   nuts3_2021.TAA ,
+# MAGIC   lULUCF_2018.LULUCF_CODE
+# MAGIC
 # MAGIC
 # MAGIC """)
 # MAGIC
-# MAGIC ESA_CCI_CUBE.createOrReplaceTempView("ESA_CCI_CUBE")
+# MAGIC //ESA_CCI_CUBE
+# MAGIC //    .coalesce(1) //be careful with this
+# MAGIC //    .write.format("com.databricks.spark.csv")
+# MAGIC //    .mode(SaveMode.Overwrite)
+# MAGIC //    .option("sep","|")
+# MAGIC //    .option("overwriteSchema", "true")
+# MAGIC //    .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+# MAGIC //    .option("emptyValue", "")
+# MAGIC //    .option("header","true")
+# MAGIC //    .option("treatEmptyValuesAsNulls", "true")  
+# MAGIC //    
+# MAGIC //    .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/AGB_timeseries")
+# MAGIC
+# MAGIC  ESA_CCI_CUBE.createOrReplaceTempView("ESA_CCI_CUBE")
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC --- checking CUBE for Luxembourg:
-# MAGIC SELECT * from ESA_CCI_CUBE
-# MAGIC where ISO2 = 'LU'
-# MAGIC
+
 
 # COMMAND ----------
 
@@ -391,5 +399,128 @@
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC use pandas  for  working wiht the cube
+# MAGIC
+
+# COMMAND ----------
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Enable Arrow-based columnar data transfers
+spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
+
+# bring sql to pandas>
+sql_for_panda = spark.sql('''
+SELECT *   from ESA_CCI_CUBE
+''')
+
+df = sql_for_panda.select("*").toPandas()
+
+#for EVA https://pandas.pydata.org/pandas-docs/stable/user_guide/10min.html
+
+
+
+#df_transformed =df.melt(id_vars=[
+#'GridNum10km',
+#'AreaHa',
+#'LEVEL3_code',
+#'ISO2',
+#'TAA',
+#'LULUCF_CODE' ], var_name="year", value_name="xxx")
+
+## updapte year:
+#df_transformed['year_link'] = df_transformed['year'].str[-4:]
+#
+## dataframe to table:
+#df_transformed_gdmp_new1 = spark.createDataFrame(df_transformed)
+#df_transformed_gdmp_new1.createOrReplaceTempView("df_transformed_fire")
+
+
+
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Start playing with the data:
+# MAGIC
+
+# COMMAND ----------
+
+df
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+# correlation between esacciagb2010	 and esacciagb2020
+print(df['esacciagb2010'].corr(df['esacciagb2020']))
+
+# COMMAND ----------
+
+import seaborn as sns
+# use the function regplot to make a scatterplot
+sns.regplot(x=df["esacciagb2010"], y=df["esacciagb2020"])
+
+plt.savefig("Plotting_Correlation_Scatterplot_With_Regression_Fit.jpg")
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
 # MAGIC %md ## 4) Final CUBES and export
 # MAGIC In the following lines we exported the tables into greenmonkey
+
+# COMMAND ----------
+
+# MAGIC %scala
+# MAGIC
+# MAGIC
+# MAGIC /// exporting AGB stock union
+# MAGIC val tableDF_export_db_agb = spark.sql("""
+# MAGIC
+# MAGIC ---- COPY THE OUTPUT TABLE sql query here!!!!!!!!!!!!!
+# MAGIC
+# MAGIC
+# MAGIC """)
+# MAGIC tableDF_export_db_agb
+# MAGIC     .coalesce(1) //be careful with this
+# MAGIC     .write.format("com.databricks.spark.csv")
+# MAGIC     .mode(SaveMode.Overwrite)
+# MAGIC     .option("sep","|")
+# MAGIC     .option("overwriteSchema", "true")
+# MAGIC     .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+# MAGIC     .option("emptyValue", "")
+# MAGIC     .option("header","true")
+# MAGIC     .option("treatEmptyValuesAsNulls", "true")  
+# MAGIC     
+# MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/AGB_timeseries")
+# MAGIC
+# MAGIC     tableDF_export_db_agb.createOrReplaceTempView("AGB_STOCK_2018")
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC //SUB_CUBE_SOC_STOCK_3_wetland.createOrReplaceTempView("SOC_STOCK_3_wetland_nuts3")
+# MAGIC 	
+
+# COMMAND ----------
+
+
+	### Reading URL of resulting table: (for downloading to EEA greenmonkey)
+folder ="dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/AGB_timeseries"
+folder_output =folder[29:]
+for file in dbutils.fs.ls(folder):
+    if file.name[-2:] =="gz":
+        print ("Exported file:")
+        print(file.name)
+        print ("Exported URL:")
+        URL = "https://cwsblobstorage01.blob.core.windows.net/cwsblob01"+"/"+folder_output +"/"+file.name
+        print (URL)
