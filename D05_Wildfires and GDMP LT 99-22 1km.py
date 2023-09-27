@@ -42,7 +42,7 @@
 # MAGIC
 # MAGIC val fire_sq1 = spark.sql(""" 
 # MAGIC  select 
-# MAGIC GridNum,
+# MAGIC GridNum as GridNum100m,
 # MAGIC GridNum10km,
 # MAGIC p2000.MONTH as FIREDATE_2000,
 # MAGIC p2001.MONTH as FIREDATE_2001,
@@ -126,8 +126,8 @@
 # MAGIC
 # MAGIC val fire_sq1_year = spark.sql(""" 
 # MAGIC          select  
-# MAGIC                   GridNum,
-# MAGIC                   GridNum & cast(-16777216 as bigint) as GridNum1km, -----######################## new gridnum 1km !!!
+# MAGIC                   GridNum100m,
+# MAGIC                   GridNum100m & cast(-16777216 as bigint) as GridNum1km, -----######################## new gridnum 1km !!!
 # MAGIC                   GridNum10km,
 # MAGIC                   AreaHa,
 # MAGIC                   IF(FIREDATE_2000>0, 1,0)as fire_2000,
@@ -185,21 +185,22 @@
 # MAGIC  """)
 # MAGIC                                   
 # MAGIC fire_sq1_year.createOrReplaceTempView("fire_year")
-# MAGIC
-# MAGIC
-# MAGIC
 
 # COMMAND ----------
 
 # MAGIC
 # MAGIC %sql
-# MAGIC select * from fire_year where fire_2020 >0
+# MAGIC select * from fire_year where fire_2000 >0
 # MAGIC
 # MAGIC
 
 # COMMAND ----------
 
-
+# MAGIC %sql
+# MAGIC select * from nuts3_2021
+# MAGIC where
+# MAGIC
+# MAGIC  nuts3_2021.ISO2 ='PT'
 
 # COMMAND ----------
 
@@ -496,27 +497,22 @@
 # COMMAND ----------
 
 # MAGIC %scala
-# MAGIC
-# MAGIC //##########################################################################################################################################
-# MAGIC //// 13 (GDMP 1km   1999-2019)  1km-- ############################## 1000m DIM
 # MAGIC //##########################################################################################################################################
 # MAGIC
+# MAGIC //// 13 (GDMP 1km  physical values 1999-2022)  1km-- ############################## 1000m DIM
 # MAGIC
-# MAGIC //  https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=2009&fileId=1031
-# MAGIC //  absolute value and standard deviation The GDMP_annual is expressed in kg DM/ha    (DM= dry matter)
-# MAGIC //  cwsblobstorage01/cwsblob01/Dimensions/D_gdmp_1km_1031_2023724_1km
+# MAGIC //##########################################################################################################################################
 # MAGIC
-# MAGIC val parquetFileDF_gdmp_1km = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_gdmp_1km_1031_2023724_1km/")
-# MAGIC parquetFileDF_gdmp_1km.createOrReplaceTempView("GDMP_1km_99_19_raw")
+# MAGIC //https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=2020&fileId=1042
 # MAGIC
+# MAGIC //cwsblobstorage01/cwsblob01/Dimensions/D_gdmp_1km_pv_1042_2023918_1km
 # MAGIC
-# MAGIC // we found GAPs in the time-series.. therefore we add. an attribute which shows the gaps [QC_gap_YES]
-# MAGIC // if the attribute is 1, then this row should not be used for statistics OR a gab filling should be done:
+# MAGIC val parquetFileDF_gdmp_1km_pv = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_gdmp_1km_pv_1042_2023918_1km/")
+# MAGIC parquetFileDF_gdmp_1km_pv.createOrReplaceTempView("gdmp_1km_pv_raw")
 # MAGIC
-# MAGIC val parquetFileDF_gdmp_1km_2 = spark.sql(""" 
-# MAGIC
+# MAGIC val GDMP_1km_99_22 = spark.sql(""" 
 # MAGIC Select
-# MAGIC gridnum,
+# MAGIC gridnum as GridNum1km,
 # MAGIC GridNum10km,
 # MAGIC x,
 # MAGIC y,
@@ -543,6 +539,9 @@
 # MAGIC GDMP_2017_pv_1000m_EPSG3035 as GDMP_2017 ,
 # MAGIC GDMP_2018_pv_1000m_EPSG3035 as GDMP_2018 ,
 # MAGIC GDMP_2019_pv_1000m_EPSG3035 as GDMP_2019 ,
+# MAGIC GDMP_2020_pv_300to1000m_EPSG3035 as GDMP_2020 ,
+# MAGIC GDMP_2021_pv_300to1000m_EPSG3035 as GDMP_2021 ,
+# MAGIC GDMP_2022_pv_300to1000m_EPSG3035 as GDMP_2022,
 # MAGIC
 # MAGIC if(GDMP_1999_pv_1000m_EPSG3035= 0 , 1 , 
 # MAGIC if(GDMP_2000_pv_1000m_EPSG3035= 0 , 1 , 
@@ -565,77 +564,14 @@
 # MAGIC if(GDMP_2017_pv_1000m_EPSG3035= 0 , 1 , 
 # MAGIC if(GDMP_2018_pv_1000m_EPSG3035= 0 , 1 , 
 # MAGIC if(GDMP_2019_pv_1000m_EPSG3035= 0 , 1 , 
-# MAGIC 0)))))))))))))))))))))
+# MAGIC if(GDMP_2020_pv_300to1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2021_pv_300to1000m_EPSG3035= 0 , 1 , 
+# MAGIC if(GDMP_2022_pv_300to1000m_EPSG3035= 0 , 1 , 
+# MAGIC 0))))))))))))))))))))))))
 # MAGIC    as QC_gap_YES
-# MAGIC     from GDMP_1km_99_19_raw  
-# MAGIC                                                   
-# MAGIC                                                         """)                                  
-# MAGIC parquetFileDF_gdmp_1km_2.createOrReplaceTempView("GDMP_1km_99_19")  
-# MAGIC
-# MAGIC
-# MAGIC
-# MAGIC
-# MAGIC
-# MAGIC
-# MAGIC
-# MAGIC
-# MAGIC //##########################################################################################################################################
-# MAGIC //// 14 (GDMP 100m  2014-2022)  100m -- ############################## 100m DIM
-# MAGIC //##########################################################################################################################################
-# MAGIC
-# MAGIC
-# MAGIC //  https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=2016&fileId=1038
-# MAGIC //  absolute value and standard deviation The GDMP_annual is expressed in kg DM/ha    (DM= dry matter)
-# MAGIC //  cwsblobstorage01/cwsblob01/Dimensions/D_gdmp_100m_1038_2023731_100m
-# MAGIC
-# MAGIC
-# MAGIC val parquetFileDF_gdmp_100m = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_gdmp_100m_1038_2023731_100m/")
-# MAGIC parquetFileDF_gdmp_100m.createOrReplaceTempView("GDMP_100m_14_22_raw")
-# MAGIC
-# MAGIC // if the attribute is 1, then this row should not be used for statistics OR a gab filling should be done:
-# MAGIC
-# MAGIC val parquetFileDF_gdmp_100m_2 = spark.sql(""" 
-# MAGIC    Select
-# MAGIC       gridnum,
-# MAGIC       GridNum10km,
-# MAGIC       x,
-# MAGIC       y,
-# MAGIC       AreaHa,
-# MAGIC       GDMP_2014_pv_100m_EPSG3035 as GDMP_2014 ,
-# MAGIC       GDMP_2015_pv_100m_EPSG3035 as GDMP_2015 ,
-# MAGIC       GDMP_2016_pv_100m_EPSG3035 as GDMP_2016 ,
-# MAGIC       GDMP_2017_pv_100m_EPSG3035 as GDMP_2017 ,
-# MAGIC       GDMP_2018_pv_100m_EPSG3035 as GDMP_2018 ,
-# MAGIC       GDMP_2019_pv_100m_EPSG3035 as GDMP_2019 ,
-# MAGIC       GDMP_2020_pv_100m_EPSG3035 as GDMP_2020 ,
-# MAGIC       GDMP_2021_pv_100m_EPSG3035 as GDMP_2021 ,
-# MAGIC       GDMP_2022_pv_100m_EPSG3035 as GDMP_2022 ,
-# MAGIC
-# MAGIC       if(GDMP_2014_pv_100m_EPSG3035= 0 , 1 , 
-# MAGIC       if(GDMP_2015_pv_100m_EPSG3035= 0 , 1 , 
-# MAGIC       if(GDMP_2016_pv_100m_EPSG3035= 0 , 1 , 
-# MAGIC       if(GDMP_2017_pv_100m_EPSG3035= 0 , 1 , 
-# MAGIC       if(GDMP_2018_pv_100m_EPSG3035= 0 , 1 , 
-# MAGIC       if(GDMP_2019_pv_100m_EPSG3035= 0 , 1 , 
-# MAGIC       if(GDMP_2020_pv_100m_EPSG3035= 0 , 1 , 
-# MAGIC       if(GDMP_2021_pv_100m_EPSG3035= 0 , 1 , 
-# MAGIC       if(GDMP_2022_pv_100m_EPSG3035= 0 , 1 , 
-# MAGIC       0)))))))))
-# MAGIC          as QC_gap_YES
-# MAGIC          from GDMP_100m_14_22_raw
-# MAGIC                                                       """)                                  
-# MAGIC parquetFileDF_gdmp_100m_2.createOrReplaceTempView("GDMP_100m_14_22")  
-# MAGIC
-# MAGIC
-# MAGIC
-# MAGIC
-# MAGIC
-# MAGIC
-# MAGIC
-# MAGIC
-# MAGIC
-# MAGIC
-# MAGIC
+# MAGIC     from gdmp_1km_pv_raw  
+# MAGIC """)  
+# MAGIC GDMP_1km_99_22.createOrReplaceTempView("GDMP_1km_99_22")  
 # MAGIC
 
 # COMMAND ----------
@@ -647,32 +583,20 @@
 # MAGIC %scala
 # MAGIC
 # MAGIC //##########################################################################################################################################
-# MAGIC //// 13 (GDMP 1km  STATISTICS 1999-2019)  1km-- ############################## 1000m DIM
-# MAGIC //##########################################################################################################################################
 # MAGIC
-# MAGIC
-# MAGIC //  https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=2013&fileId=1035
-# MAGIC //  )
-# MAGIC //  cwsblobstorage01/cwsblob01/Dimensions/D_GDMP_1km_statistics_1035_2023727_1km
-# MAGIC
-# MAGIC val parquetFileDF_gdmp_1km = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_GDMP_1km_statistics_1035_2023727_1km/")
-# MAGIC parquetFileDF_gdmp_1km.createOrReplaceTempView("GDMP_1km_statistics")
-# MAGIC
-# MAGIC
+# MAGIC //// 14 (GDMP 1km  STATISTICS 1999-2022)  1km-- ############################## 1000m DIM
 # MAGIC
 # MAGIC //##########################################################################################################################################
-# MAGIC //// 14 (GDMP 300m  STATISTICS 2014-2022)  100m-- ############################## 100m DIM
-# MAGIC //##########################################################################################################################################
 # MAGIC
+# MAGIC  
 # MAGIC
-# MAGIC //  https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=2017&fileId=1039
-# MAGIC //  
-# MAGIC //  cwsblobstorage01/cwsblob01/Dimensions/D_gdmp_100m_statistics_1039_202381_100m
+# MAGIC //https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=2021&fileId=1043
 # MAGIC
-# MAGIC val parquetFileDF_gdmp_100m = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_gdmp_100m_statistics_1039_202381_100m/")
-# MAGIC parquetFileDF_gdmp_100m.createOrReplaceTempView("GDMP_100m_statistics")
+# MAGIC //cwsblobstorage01/cwsblob01/Dimensions/D_gdmp_1km_statistic_c_1043_2023918_1km
 # MAGIC
+# MAGIC val parquetFileDF_gdmp_1km_statistics = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_gdmp_1km_statistic_c_1043_2023918_1km/")
 # MAGIC
+# MAGIC parquetFileDF_gdmp_1km_statistics.createOrReplaceTempView("GDMP_1km_99_22_stats")
 # MAGIC
 
 # COMMAND ----------
@@ -2509,6 +2433,118 @@ for file in dbutils.fs.ls(folder):
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC SELECT 
+# MAGIC
+# MAGIC       fire_year.GridNum100m,
+# MAGIC       fire_year.GridNum10km,
+# MAGIC       fire_year.GridNum1km,
+# MAGIC       fire_year.AreaHa as Fire_area_ha,
+# MAGIC
+# MAGIC       nuts3_2021.ADM_ID,
+# MAGIC       nuts3_2021.ISO2,
+# MAGIC       PA2022.protected_area,
+# MAGIC       EnvZones.Category as env_zones,
+# MAGIC       lULUCF_2018.LULUCF_CODE,
+# MAGIC       lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC     
+# MAGIC       fire_2000
+# MAGIC
+# MAGIC  FROM fire_year 
+# MAGIC
+# MAGIC   LEFT JOIN EnvZones        ON fire_year.GridNum100m = EnvZones.GridNum
+# MAGIC   LEFT JOIN nuts3_2021      ON fire_year.GridNum100m = nuts3_2021.GridNum    
+# MAGIC   LEFT JOIN lULUCF_2018      ON fire_year.GridNum100m = lULUCF_2018.GridNum 
+# MAGIC   LEFT JOIN PA2022                ON fire_year.GridNum100m = PA2022.GridNum  
+# MAGIC
+# MAGIC where nuts3_2021.GridNum10km =13854422035595264
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT 
+# MAGIC
+# MAGIC       fire_year.GridNum10km,
+# MAGIC       fire_year.AreaHa as Fire_area_ha,
+# MAGIC
+# MAGIC       nuts3_2021.ADM_ID,
+# MAGIC       nuts3_2021.ISO2,
+# MAGIC       PA2022.protected_area,
+# MAGIC       EnvZones.Category as env_zones,
+# MAGIC       lULUCF_2018.LULUCF_CODE,
+# MAGIC       lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC     
+# MAGIC       fire_2000 as fire_2000,
+# MAGIC       fire_2001 as fire_2001,
+# MAGIC       fire_2002 as fire_2002,
+# MAGIC       fire_2003 as fire_2003,
+# MAGIC       fire_2004 as fire_2004,
+# MAGIC       fire_2005 as fire_2005,
+# MAGIC       fire_2006 as fire_2006,
+# MAGIC       fire_2007 as fire_2007,
+# MAGIC       fire_2008 as fire_2008,
+# MAGIC       fire_2009 as fire_2009,
+# MAGIC       fire_2010 as fire_2010,
+# MAGIC       fire_2011 as fire_2011,
+# MAGIC       fire_2012 as fire_2012,
+# MAGIC       fire_2013 as fire_2013,
+# MAGIC       fire_2014 as fire_2014,
+# MAGIC       fire_2015 as fire_2015,
+# MAGIC       fire_2016 as fire_2016,
+# MAGIC       fire_2017 as fire_2017,
+# MAGIC       fire_2018 as fire_2018,
+# MAGIC       fire_2019 as fire_2019,
+# MAGIC       fire_2020 as fire_2020,
+# MAGIC       fire_2021 as fire_2021,
+# MAGIC       fire_2022 as fire_2022,
+# MAGIC
+# MAGIC       GDMP_2000 as GDMP_2000,
+# MAGIC       GDMP_2001 as GDMP_2001,
+# MAGIC       GDMP_2002 as GDMP_2002,
+# MAGIC       GDMP_2003 as GDMP_2003,
+# MAGIC       GDMP_2004 as GDMP_2004,
+# MAGIC       GDMP_2005 as GDMP_2005,
+# MAGIC       GDMP_2006 as GDMP_2006,
+# MAGIC       GDMP_2007 as GDMP_2007,
+# MAGIC       GDMP_2008 as GDMP_2008,
+# MAGIC       GDMP_2009 as GDMP_2009,
+# MAGIC       GDMP_2010 as GDMP_2010,
+# MAGIC       GDMP_2011 as GDMP_2011,
+# MAGIC       GDMP_2012 as GDMP_2012,
+# MAGIC       GDMP_2013 as GDMP_2013,
+# MAGIC       GDMP_2014 as GDMP_2014,
+# MAGIC       GDMP_2015 as GDMP_2015,
+# MAGIC       GDMP_2016 as GDMP_2016,
+# MAGIC       GDMP_2017 as GDMP_2017,
+# MAGIC       GDMP_2018 as GDMP_2018,
+# MAGIC       GDMP_2019 as GDMP_2019,
+# MAGIC       GDMP_2020 as GDMP_2020,
+# MAGIC       GDMP_2021 as GDMP_2021,
+# MAGIC       GDMP_2022 as GDMP_2022,
+# MAGIC
+# MAGIC       GDMP_1km_anom_2014 as GDMP_1km_anom_2014,
+# MAGIC       GDMP_1km_anom_2015 as GDMP_1km_anom_2015,
+# MAGIC       GDMP_1km_anom_2016 as GDMP_1km_anom_2016,
+# MAGIC       GDMP_1km_anom_2017 as GDMP_1km_anom_2017,
+# MAGIC       GDMP_1km_anom_2018 as GDMP_1km_anom_2018,
+# MAGIC       GDMP_1km_anom_2019 as GDMP_1km_anom_2019,
+# MAGIC       GDMP_1km_anom_2020 as GDMP_1km_anom_2020,
+# MAGIC       GDMP_1km_anom_2021 as GDMP_1km_anom_2021,
+# MAGIC       GDMP_1km_anom_2022 as GDMP_1km_anom_2022
+# MAGIC
+# MAGIC  FROM fire_year 
+# MAGIC
+# MAGIC   LEFT JOIN EnvZones        ON fire_year.GridNum100m = EnvZones.GridNum
+# MAGIC   LEFT JOIN nuts3_2021      ON fire_year.GridNum100m = nuts3_2021.GridNum    
+# MAGIC   LEFT JOIN lULUCF_2018      ON fire_year.GridNum100m = lULUCF_2018.GridNum 
+# MAGIC   LEFT JOIN PA2022                ON fire_year.GridNum100m = PA2022.GridNum  
+# MAGIC   LEFT JOIN GDMP_1km_99_22       ON fire_year.GridNum1km = GDMP_1km_99_22.GridNum1km 
+# MAGIC   LEFT JOIN GDMP_1km_99_22_stats  ON fire_year.GridNum1km = GDMP_1km_99_22_stats.GridNum 
+# MAGIC
+# MAGIC where nuts3_2021.GridNum10km =13854422035595264
+
+# COMMAND ----------
+
 # MAGIC %scala
 # MAGIC //// DRAFT: test cube of wild-fire pixel with GDMP 100m
 # MAGIC
@@ -2621,6 +2657,224 @@ for file in dbutils.fs.ls(folder):
 # MAGIC
 # MAGIC
 # MAGIC SHOW COLUMNS IN burnt_carbon_10km;
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT 
+# MAGIC
+# MAGIC       fire_year.GridNum10km,
+# MAGIC       sum(fire_year.AreaHa) as Fire_area_ha,
+# MAGIC
+# MAGIC       nuts3_2021.ADM_ID,
+# MAGIC       nuts3_2021.ISO2,
+# MAGIC       PA2022.protected_area,
+# MAGIC       EnvZones.Category as env_zones,
+# MAGIC       lULUCF_2018.LULUCF_CODE,
+# MAGIC       lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC     
+# MAGIC       sum(fire_2000) as fire_2000,
+# MAGIC       sum(fire_2001) as fire_2001,
+# MAGIC       sum(fire_2002) as fire_2002,
+# MAGIC       sum(fire_2003) as fire_2003,
+# MAGIC       sum(fire_2004) as fire_2004,
+# MAGIC       sum(fire_2005) as fire_2005,
+# MAGIC       sum(fire_2006) as fire_2006,
+# MAGIC       sum(fire_2007) as fire_2007,
+# MAGIC       sum(fire_2008) as fire_2008,
+# MAGIC       sum(fire_2009) as fire_2009,
+# MAGIC       sum(fire_2010) as fire_2010,
+# MAGIC       sum(fire_2011) as fire_2011,
+# MAGIC       sum(fire_2012) as fire_2012,
+# MAGIC       sum(fire_2013) as fire_2013,
+# MAGIC       sum(fire_2014) as fire_2014,
+# MAGIC       sum(fire_2015) as fire_2015,
+# MAGIC       sum(fire_2016) as fire_2016,
+# MAGIC       sum(fire_2017) as fire_2017,
+# MAGIC       sum(fire_2018) as fire_2018,
+# MAGIC       sum(fire_2019) as fire_2019,
+# MAGIC       sum(fire_2020) as fire_2020,
+# MAGIC       sum(fire_2021) as fire_2021,
+# MAGIC       sum(fire_2022) as fire_2022,
+# MAGIC
+# MAGIC       sum(GDMP_2000) as GDMP_2000,
+# MAGIC       sum(GDMP_2001) as GDMP_2001,
+# MAGIC       sum(GDMP_2002) as GDMP_2002,
+# MAGIC       sum(GDMP_2003) as GDMP_2003,
+# MAGIC       sum(GDMP_2004) as GDMP_2004,
+# MAGIC       sum(GDMP_2005) as GDMP_2005,
+# MAGIC       sum(GDMP_2006) as GDMP_2006,
+# MAGIC       sum(GDMP_2007) as GDMP_2007,
+# MAGIC       sum(GDMP_2008) as GDMP_2008,
+# MAGIC       sum(GDMP_2009) as GDMP_2009,
+# MAGIC       sum(GDMP_2010) as GDMP_2010,
+# MAGIC       sum(GDMP_2011) as GDMP_2011,
+# MAGIC       sum(GDMP_2012) as GDMP_2012,
+# MAGIC       sum(GDMP_2013) as GDMP_2013,
+# MAGIC       sum(GDMP_2014) as GDMP_2014,
+# MAGIC       sum(GDMP_2015) as GDMP_2015,
+# MAGIC       sum(GDMP_2016) as GDMP_2016,
+# MAGIC       sum(GDMP_2017) as GDMP_2017,
+# MAGIC       sum(GDMP_2018) as GDMP_2018,
+# MAGIC       sum(GDMP_2019) as GDMP_2019,
+# MAGIC       sum(GDMP_2020) as GDMP_2020,
+# MAGIC       sum(GDMP_2021) as GDMP_2021,
+# MAGIC       sum(GDMP_2022) as GDMP_2022,
+# MAGIC
+# MAGIC       avg(GDMP_1km_anom_2000) as GDMP_1km_anom_2000,
+# MAGIC       avg(GDMP_1km_anom_2001) as GDMP_1km_anom_2001,
+# MAGIC       avg(GDMP_1km_anom_2002) as GDMP_1km_anom_2002,
+# MAGIC       avg(GDMP_1km_anom_2003) as GDMP_1km_anom_2003,
+# MAGIC       avg(GDMP_1km_anom_2004) as GDMP_1km_anom_2004,
+# MAGIC       avg(GDMP_1km_anom_2005) as GDMP_1km_anom_2005,
+# MAGIC       avg(GDMP_1km_anom_2006) as GDMP_1km_anom_2006,
+# MAGIC       avg(GDMP_1km_anom_2007) as GDMP_1km_anom_2007,
+# MAGIC       avg(GDMP_1km_anom_2008) as GDMP_1km_anom_2008,
+# MAGIC       avg(GDMP_1km_anom_2009) as GDMP_1km_anom_2009,
+# MAGIC       avg(GDMP_1km_anom_2010) as GDMP_1km_anom_2010,
+# MAGIC       avg(GDMP_1km_anom_2011) as GDMP_1km_anom_2011,
+# MAGIC       avg(GDMP_1km_anom_2012) as GDMP_1km_anom_2012,
+# MAGIC       avg(GDMP_1km_anom_2013) as GDMP_1km_anom_2013,
+# MAGIC       avg(GDMP_1km_anom_2014) as GDMP_1km_anom_2014,
+# MAGIC       avg(GDMP_1km_anom_2015) as GDMP_1km_anom_2015,
+# MAGIC       avg(GDMP_1km_anom_2016) as GDMP_1km_anom_2016,
+# MAGIC       avg(GDMP_1km_anom_2017) as GDMP_1km_anom_2017,
+# MAGIC       avg(GDMP_1km_anom_2018) as GDMP_1km_anom_2018,
+# MAGIC       avg(GDMP_1km_anom_2019) as GDMP_1km_anom_2019,
+# MAGIC       avg(GDMP_1km_anom_2020) as GDMP_1km_anom_2020,
+# MAGIC       avg(GDMP_1km_anom_2021) as GDMP_1km_anom_2021,
+# MAGIC       avg(GDMP_1km_anom_2022) as GDMP_1km_anom_2022,
+# MAGIC
+# MAGIC       avg(GDMP_1km_deviation_2000) as GDMP_1km_deviation_2000,
+# MAGIC       avg(GDMP_1km_deviation_2001) as GDMP_1km_deviation_2001,
+# MAGIC       avg(GDMP_1km_deviation_2002) as GDMP_1km_deviation_2002,
+# MAGIC       avg(GDMP_1km_deviation_2003) as GDMP_1km_deviation_2003,
+# MAGIC       avg(GDMP_1km_deviation_2004) as GDMP_1km_deviation_2004,
+# MAGIC       avg(GDMP_1km_deviation_2005) as GDMP_1km_deviation_2005,
+# MAGIC       avg(GDMP_1km_deviation_2006) as GDMP_1km_deviation_2006,
+# MAGIC       avg(GDMP_1km_deviation_2007) as GDMP_1km_deviation_2007,
+# MAGIC       avg(GDMP_1km_deviation_2008) as GDMP_1km_deviation_2008,
+# MAGIC       avg(GDMP_1km_deviation_2009) as GDMP_1km_deviation_2009,
+# MAGIC       avg(GDMP_1km_deviation_2010) as GDMP_1km_deviation_2010,
+# MAGIC       avg(GDMP_1km_deviation_2011) as GDMP_1km_deviation_2011,
+# MAGIC       avg(GDMP_1km_deviation_2012) as GDMP_1km_deviation_2012,
+# MAGIC       avg(GDMP_1km_deviation_2013) as GDMP_1km_deviation_2013,
+# MAGIC       avg(GDMP_1km_deviation_2014) as GDMP_1km_deviation_2014,
+# MAGIC       avg(GDMP_1km_deviation_2015) as GDMP_1km_deviation_2015,
+# MAGIC       avg(GDMP_1km_deviation_2016) as GDMP_1km_deviation_2016,
+# MAGIC       avg(GDMP_1km_deviation_2017) as GDMP_1km_deviation_2017,
+# MAGIC       avg(GDMP_1km_deviation_2018) as GDMP_1km_deviation_2018,
+# MAGIC       avg(GDMP_1km_deviation_2019) as GDMP_1km_deviation_2019,
+# MAGIC       avg(GDMP_1km_deviation_2020) as GDMP_1km_deviation_2020,
+# MAGIC       avg(GDMP_1km_deviation_2021) as GDMP_1km_deviation_2021,
+# MAGIC       avg(GDMP_1km_deviation_2022) as GDMP_1km_deviation_2022,
+# MAGIC
+# MAGIC       avg(GDMP_1km_mean) as GDMP_1km_mean,
+# MAGIC       avg(GDMP_1km_std) as GDMP_1km_std,
+# MAGIC       avg(GDMP_1km_pvalue) as GDMP_1km_pvalue,
+# MAGIC       avg(GDMP_1km_slope) as GDMP_1km_slope
+# MAGIC
+# MAGIC       
+# MAGIC
+# MAGIC  FROM fire_year 
+# MAGIC
+# MAGIC   LEFT JOIN EnvZones                ON fire_year.GridNum100m = EnvZones.GridNum
+# MAGIC   LEFT JOIN nuts3_2021              ON fire_year.GridNum100m = nuts3_2021.GridNum    
+# MAGIC   LEFT JOIN lULUCF_2018             ON fire_year.GridNum100m = lULUCF_2018.GridNum 
+# MAGIC   LEFT JOIN PA2022                  ON fire_year.GridNum100m = PA2022.GridNum  
+# MAGIC   LEFT JOIN GDMP_1km_99_22          ON fire_year.GridNum1km = GDMP_1km_99_22.GridNum1km 
+# MAGIC   LEFT JOIN GDMP_1km_99_22_stats    ON fire_year.GridNum1km = GDMP_1km_99_22_stats.GridNum 
+# MAGIC
+# MAGIC where nuts3_2021.GridNum10km =13854422035595264
+# MAGIC
+# MAGIC GROUP BY 
+# MAGIC
+# MAGIC fire_year.GridNum10km,
+# MAGIC nuts3_2021.ADM_ID,
+# MAGIC nuts3_2021.ISO2,
+# MAGIC EnvZones.Category,
+# MAGIC lULUCF_2018.LULUCF_CODE,
+# MAGIC lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC PA2022.protected_area
+# MAGIC       
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC SELECT 
+# MAGIC
+# MAGIC       fire_year.GridNum10km,
+# MAGIC       sum(fire_year.AreaHa) as Fire_area_ha,
+# MAGIC
+# MAGIC       nuts3_2021.ADM_ID,
+# MAGIC       nuts3_2021.ISO2,
+# MAGIC       --maes_sq1.MAES_CODE,
+# MAGIC       --PA2022.protected_area,
+# MAGIC       --EnvZones.Category as env_zones,
+# MAGIC     
+# MAGIC       --fire_2014 as fire_2014,
+# MAGIC       --fire_2015 as fire_2015,
+# MAGIC       sum(fire_2016) as fire_2016,
+# MAGIC       sum(fire_2017) as fire_2017,
+# MAGIC       sum(fire_2018) as fire_2018,
+# MAGIC       --fire_2018 as fire_2018,
+# MAGIC       --fire_2019 as fire_2019,
+# MAGIC       --fire_2020 as fire_2020,
+# MAGIC       --fire_2021 as fire_2021,
+# MAGIC       --fire_2022 as fire_2022,
+# MAGIC
+# MAGIC       --fire_2022 + fire_2021+fire_2020+fire_2019+fire_2018+fire_2017+fire_2016+fire_2015+fire_2014 as total_fire_14_22,
+# MAGIC
+# MAGIC
+# MAGIC       --GDMP_2014 as GDMP_2014,
+# MAGIC       --GDMP_2015 as GDMP_2015,
+# MAGIC       sum(GDMP_2016) as GDMP_2016,
+# MAGIC       sum(GDMP_2017) as GDMP_2017,
+# MAGIC       sum(GDMP_2018) as GDMP_2018,
+# MAGIC       --GDMP_2019 as GDMP_2019,
+# MAGIC       --GDMP_2020 as GDMP_2020,
+# MAGIC       --GDMP_2021 as GDMP_2021,
+# MAGIC       --GDMP_2022 as GDMP_2022,
+# MAGIC
+# MAGIC       --GDMP_100m_anom_2014 as GDMP_100m_anom_2014
+# MAGIC       --GDMP_100m_anom_2015 as GDMP_100m_anom_2015,
+# MAGIC       --GDMP_100m_anom_2016 as GDMP_100m_anom_2016,
+# MAGIC       avg(GDMP_1km_anom_2017) as GDMP_1km_anom_2017 
+# MAGIC       --GDMP_100m_anom_2018 as GDMP_100m_anom_2018,
+# MAGIC       --GDMP_100m_anom_2019 as GDMP_100m_anom_2019,
+# MAGIC       --GDMP_100m_anom_2020 as GDMP_100m_anom_2020,
+# MAGIC       --GDMP_100m_anom_2021 as GDMP_100m_anom_2021,
+# MAGIC       --GDMP_100m_anom_2022 as GDMP_100m_anom_2022
+# MAGIC      
+# MAGIC
+# MAGIC
+# MAGIC  FROM fire_year 
+# MAGIC
+# MAGIC   --LEFT JOIN maes_sq1        ON fire_year.GridNum = maes_sq1.GridNum
+# MAGIC   --LEFT JOIN EnvZones        ON fire_year.GridNum = EnvZones.GridNum
+# MAGIC   LEFT JOIN nuts3_2021      ON fire_year.GridNum100m = nuts3_2021.GridNum    
+# MAGIC
+# MAGIC   --LEFT JOIN PA2022                ON fire_year.GridNum = PA2022.GridNum  
+# MAGIC   LEFT JOIN GDMP_1km_99_22       ON fire_year.GridNum1km = GDMP_1km_99_22.GridNum1km 
+# MAGIC   LEFT JOIN GDMP_1km_99_22_stats  ON fire_year.GridNum1km = GDMP_1km_99_22_stats.GridNum 
+# MAGIC   ---left join   df_transformed_carbon_burnt on  fire_year.GridNum10km = df_transformed_carbon_burnt.GridNum10km  
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC where fire_2017 >0 OR fire_2018 >0 OR fire_2016 >0
+# MAGIC
+# MAGIC --nuts3_2021.GridNum10km =13854422035595264 ---AND fire_2022 + fire_2021+fire_2020+fire_2019+fire_2018+fire_2017+fire_2016+fire_2015+fire_2014  >0
+# MAGIC
+# MAGIC ---9713519511470080
+# MAGIC
+# MAGIC GROUP BY
+# MAGIC
+# MAGIC   fire_year.GridNum10km,
+# MAGIC   nuts3_2021.ADM_ID,
+# MAGIC   nuts3_2021.ISO2
+# MAGIC
+# MAGIC
 
 # COMMAND ----------
 
@@ -2948,6 +3202,96 @@ for file in dbutils.fs.ls(folder):
 
 # COMMAND ----------
 
+# MAGIC %scala
+# MAGIC //// CUBE: wild-fire pixel with GDMP 1km
+# MAGIC
+# MAGIC val fire_gdmp100_pixel_cube = spark.sql(""" 
+# MAGIC
+# MAGIC SELECT 
+# MAGIC
+# MAGIC       fire_year.GridNum10km,
+# MAGIC     
+# MAGIC       nuts3_2021.ADM_ID,
+# MAGIC       nuts3_2021.ISO2,
+# MAGIC       maes_sq1.MAES_CODE,
+# MAGIC       ----PA2022.protected_area,
+# MAGIC       EnvZones.Category as env_zones,
+# MAGIC
+# MAGIC       SUM(fire_year.AreaHa) as Fire_area_ha,
+# MAGIC     
+# MAGIC       SUM(fire_2014) as fire_2014,
+# MAGIC       SUM(fire_2015) as fire_2015,
+# MAGIC       SUM(fire_2016) as fire_2016,
+# MAGIC       SUM(fire_2017) as fire_2017,
+# MAGIC       SUM(fire_2018) as fire_2018,
+# MAGIC       SUM(fire_2019) as fire_2019,
+# MAGIC       SUM(fire_2020) as fire_2020,
+# MAGIC       SUM(fire_2021) as fire_2021,
+# MAGIC       SUM(fire_2022) as fire_2022,
+# MAGIC
+# MAGIC       SUM(GDMP_2014) as GDMP_2014,
+# MAGIC       SUM(GDMP_2015) as GDMP_2015,
+# MAGIC       SUM(GDMP_2016) as GDMP_2016,
+# MAGIC       SUM(GDMP_2017) as GDMP_2017,
+# MAGIC       SUM(GDMP_2018) as GDMP_2018,
+# MAGIC       SUM(GDMP_2019) as GDMP_2019,
+# MAGIC       SUM(GDMP_2020) as GDMP_2020,
+# MAGIC       SUM(GDMP_2021) as GDMP_2021,
+# MAGIC       SUM(GDMP_2022) as GDMP_2022,
+# MAGIC
+# MAGIC       AVG(GDMP_100m_anom_2014) as GDMP_100m_anom_2014,
+# MAGIC       AVG(GDMP_100m_anom_2015) as GDMP_100m_anom_2015,
+# MAGIC       AVG(GDMP_100m_anom_2016) as GDMP_100m_anom_2016,
+# MAGIC       AVG(GDMP_100m_anom_2017) as GDMP_100m_anom_2017,
+# MAGIC       AVG(GDMP_100m_anom_2018) as GDMP_100m_anom_2018,
+# MAGIC       AVG(GDMP_100m_anom_2019) as GDMP_100m_anom_2019,
+# MAGIC       AVG(GDMP_100m_anom_2020) as GDMP_100m_anom_2020,
+# MAGIC       AVG(GDMP_100m_anom_2021) as GDMP_100m_anom_2021,
+# MAGIC       AVG(GDMP_100m_anom_2022) as GDMP_100m_anom_2022
+# MAGIC
+# MAGIC  FROM fire_year 
+# MAGIC
+# MAGIC   LEFT JOIN maes_sq1        ON fire_year.GridNum = maes_sq1.GridNum
+# MAGIC   LEFT JOIN EnvZones        ON fire_year.GridNum = EnvZones.GridNum
+# MAGIC   LEFT JOIN nuts3_2021      ON fire_year.GridNum = nuts3_2021.GridNum    
+# MAGIC
+# MAGIC   LEFT JOIN PA2022                ON fire_year.GridNum = PA2022.GridNum  
+# MAGIC   LEFT JOIN GDMP_100m_14_22       ON fire_year.GridNum = GDMP_100m_14_22.GridNum 
+# MAGIC   LEFT JOIN GDMP_100m_statistics  ON fire_year.GridNum = GDMP_100m_statistics.GridNum 
+# MAGIC
+# MAGIC -----where nuts3_2021.ISO2 ='PT' and nuts3_2021.GridNum = 5122646148644864
+# MAGIC ---where nuts3_2021.GridNum10km =13854422035595264
+# MAGIC GROUP BY 
+# MAGIC       fire_year.GridNum10km,
+# MAGIC       nuts3_2021.ADM_ID,
+# MAGIC       nuts3_2021.ISO2,
+# MAGIC       maes_sq1.MAES_CODE,
+# MAGIC       EnvZones.Category
+# MAGIC
+# MAGIC    """)
+# MAGIC
+# MAGIC fire_gdmp100_pixel_cube.createOrReplaceTempView("fire_gdmp100_pixel_cube")
+# MAGIC
+# MAGIC
+# MAGIC // Exporting the final table
+# MAGIC
+# MAGIC //approach_2_test_cube.write.parquet("dbfs:/mnt/trainingDatabricks/ExportTable/wildfires/test_cube_approach2.parquet")
+# MAGIC fire_gdmp100_pixel_cube
+# MAGIC     .coalesce(1) //be careful with this
+# MAGIC     .write.format("com.databricks.spark.csv")
+# MAGIC     .mode(SaveMode.Overwrite)
+# MAGIC     .option("sep","|")
+# MAGIC     .option("overwriteSchema", "true")
+# MAGIC     .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+# MAGIC     .option("emptyValue", "")
+# MAGIC     .option("header","true")
+# MAGIC     .option("treatEmptyValuesAsNulls", "true")  
+# MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/wildfires/fire_gdmp100_pixel_cube")
+# MAGIC
+# MAGIC
+
+# COMMAND ----------
+
 ##///### Reading URL of resulting table: (for downloading to EEA greenmonkey)
 folder =("dbfs:/mnt/trainingDatabricks/ExportTable/wildfires/fire_gdmp100_pixel_cube")
 
@@ -2959,6 +3303,163 @@ for file in dbutils.fs.ls(folder):
         #print ("Exported URL:")
         URL = "https://cwsblobstorage01.blob.core.windows.net/cwsblob01"+"/"+folder_output +"/"+file.name
         print (URL)
+
+# COMMAND ----------
+
+# MAGIC %scala
+# MAGIC //// CUBE: wild-fire pixel with GDMP 1km
+# MAGIC
+# MAGIC val fire_gdmp1km_pixel_cube = spark.sql(""" 
+# MAGIC
+# MAGIC SELECT 
+# MAGIC
+# MAGIC       fire_year.GridNum10km,
+# MAGIC       sum(fire_year.AreaHa) as Fire_area_ha,
+# MAGIC
+# MAGIC       nuts3_2021.ADM_ID,
+# MAGIC       nuts3_2021.ISO2,
+# MAGIC       PA2022.protected_area,
+# MAGIC       EnvZones.Category as env_zones,
+# MAGIC       lULUCF_2018.LULUCF_CODE,
+# MAGIC       lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC     
+# MAGIC       sum(fire_2000) as fire_2000,
+# MAGIC       sum(fire_2001) as fire_2001,
+# MAGIC       sum(fire_2002) as fire_2002,
+# MAGIC       sum(fire_2003) as fire_2003,
+# MAGIC       sum(fire_2004) as fire_2004,
+# MAGIC       sum(fire_2005) as fire_2005,
+# MAGIC       sum(fire_2006) as fire_2006,
+# MAGIC       sum(fire_2007) as fire_2007,
+# MAGIC       sum(fire_2008) as fire_2008,
+# MAGIC       sum(fire_2009) as fire_2009,
+# MAGIC       sum(fire_2010) as fire_2010,
+# MAGIC       sum(fire_2011) as fire_2011,
+# MAGIC       sum(fire_2012) as fire_2012,
+# MAGIC       sum(fire_2013) as fire_2013,
+# MAGIC       sum(fire_2014) as fire_2014,
+# MAGIC       sum(fire_2015) as fire_2015,
+# MAGIC       sum(fire_2016) as fire_2016,
+# MAGIC       sum(fire_2017) as fire_2017,
+# MAGIC       sum(fire_2018) as fire_2018,
+# MAGIC       sum(fire_2019) as fire_2019,
+# MAGIC       sum(fire_2020) as fire_2020,
+# MAGIC       sum(fire_2021) as fire_2021,
+# MAGIC       sum(fire_2022) as fire_2022,
+# MAGIC
+# MAGIC       sum(GDMP_2000) as GDMP_2000,
+# MAGIC       sum(GDMP_2001) as GDMP_2001,
+# MAGIC       sum(GDMP_2002) as GDMP_2002,
+# MAGIC       sum(GDMP_2003) as GDMP_2003,
+# MAGIC       sum(GDMP_2004) as GDMP_2004,
+# MAGIC       sum(GDMP_2005) as GDMP_2005,
+# MAGIC       sum(GDMP_2006) as GDMP_2006,
+# MAGIC       sum(GDMP_2007) as GDMP_2007,
+# MAGIC       sum(GDMP_2008) as GDMP_2008,
+# MAGIC       sum(GDMP_2009) as GDMP_2009,
+# MAGIC       sum(GDMP_2010) as GDMP_2010,
+# MAGIC       sum(GDMP_2011) as GDMP_2011,
+# MAGIC       sum(GDMP_2012) as GDMP_2012,
+# MAGIC       sum(GDMP_2013) as GDMP_2013,
+# MAGIC       sum(GDMP_2014) as GDMP_2014,
+# MAGIC       sum(GDMP_2015) as GDMP_2015,
+# MAGIC       sum(GDMP_2016) as GDMP_2016,
+# MAGIC       sum(GDMP_2017) as GDMP_2017,
+# MAGIC       sum(GDMP_2018) as GDMP_2018,
+# MAGIC       sum(GDMP_2019) as GDMP_2019,
+# MAGIC       sum(GDMP_2020) as GDMP_2020,
+# MAGIC       sum(GDMP_2021) as GDMP_2021,
+# MAGIC       sum(GDMP_2022) as GDMP_2022,
+# MAGIC
+# MAGIC       avg(GDMP_1km_anom_2000) as GDMP_1km_anom_2000,
+# MAGIC       avg(GDMP_1km_anom_2001) as GDMP_1km_anom_2001,
+# MAGIC       avg(GDMP_1km_anom_2002) as GDMP_1km_anom_2002,
+# MAGIC       avg(GDMP_1km_anom_2003) as GDMP_1km_anom_2003,
+# MAGIC       avg(GDMP_1km_anom_2004) as GDMP_1km_anom_2004,
+# MAGIC       avg(GDMP_1km_anom_2005) as GDMP_1km_anom_2005,
+# MAGIC       avg(GDMP_1km_anom_2006) as GDMP_1km_anom_2006,
+# MAGIC       avg(GDMP_1km_anom_2007) as GDMP_1km_anom_2007,
+# MAGIC       avg(GDMP_1km_anom_2008) as GDMP_1km_anom_2008,
+# MAGIC       avg(GDMP_1km_anom_2009) as GDMP_1km_anom_2009,
+# MAGIC       avg(GDMP_1km_anom_2010) as GDMP_1km_anom_2010,
+# MAGIC       avg(GDMP_1km_anom_2011) as GDMP_1km_anom_2011,
+# MAGIC       avg(GDMP_1km_anom_2012) as GDMP_1km_anom_2012,
+# MAGIC       avg(GDMP_1km_anom_2013) as GDMP_1km_anom_2013,
+# MAGIC       avg(GDMP_1km_anom_2014) as GDMP_1km_anom_2014,
+# MAGIC       avg(GDMP_1km_anom_2015) as GDMP_1km_anom_2015,
+# MAGIC       avg(GDMP_1km_anom_2016) as GDMP_1km_anom_2016,
+# MAGIC       avg(GDMP_1km_anom_2017) as GDMP_1km_anom_2017,
+# MAGIC       avg(GDMP_1km_anom_2018) as GDMP_1km_anom_2018,
+# MAGIC       avg(GDMP_1km_anom_2019) as GDMP_1km_anom_2019,
+# MAGIC       avg(GDMP_1km_anom_2020) as GDMP_1km_anom_2020,
+# MAGIC       avg(GDMP_1km_anom_2021) as GDMP_1km_anom_2021,
+# MAGIC       avg(GDMP_1km_anom_2022) as GDMP_1km_anom_2022,
+# MAGIC
+# MAGIC       avg(GDMP_1km_deviation_2000) as GDMP_1km_deviation_2000,
+# MAGIC       avg(GDMP_1km_deviation_2001) as GDMP_1km_deviation_2001,
+# MAGIC       avg(GDMP_1km_deviation_2002) as GDMP_1km_deviation_2002,
+# MAGIC       avg(GDMP_1km_deviation_2003) as GDMP_1km_deviation_2003,
+# MAGIC       avg(GDMP_1km_deviation_2004) as GDMP_1km_deviation_2004,
+# MAGIC       avg(GDMP_1km_deviation_2005) as GDMP_1km_deviation_2005,
+# MAGIC       avg(GDMP_1km_deviation_2006) as GDMP_1km_deviation_2006,
+# MAGIC       avg(GDMP_1km_deviation_2007) as GDMP_1km_deviation_2007,
+# MAGIC       avg(GDMP_1km_deviation_2008) as GDMP_1km_deviation_2008,
+# MAGIC       avg(GDMP_1km_deviation_2009) as GDMP_1km_deviation_2009,
+# MAGIC       avg(GDMP_1km_deviation_2010) as GDMP_1km_deviation_2010,
+# MAGIC       avg(GDMP_1km_deviation_2011) as GDMP_1km_deviation_2011,
+# MAGIC       avg(GDMP_1km_deviation_2012) as GDMP_1km_deviation_2012,
+# MAGIC       avg(GDMP_1km_deviation_2013) as GDMP_1km_deviation_2013,
+# MAGIC       avg(GDMP_1km_deviation_2014) as GDMP_1km_deviation_2014,
+# MAGIC       avg(GDMP_1km_deviation_2015) as GDMP_1km_deviation_2015,
+# MAGIC       avg(GDMP_1km_deviation_2016) as GDMP_1km_deviation_2016,
+# MAGIC       avg(GDMP_1km_deviation_2017) as GDMP_1km_deviation_2017,
+# MAGIC       avg(GDMP_1km_deviation_2018) as GDMP_1km_deviation_2018,
+# MAGIC       avg(GDMP_1km_deviation_2019) as GDMP_1km_deviation_2019,
+# MAGIC       avg(GDMP_1km_deviation_2020) as GDMP_1km_deviation_2020,
+# MAGIC       avg(GDMP_1km_deviation_2021) as GDMP_1km_deviation_2021,
+# MAGIC       avg(GDMP_1km_deviation_2022) as GDMP_1km_deviation_2022,
+# MAGIC
+# MAGIC       avg(GDMP_1km_mean) as GDMP_1km_mean,
+# MAGIC       avg(GDMP_1km_std) as GDMP_1km_std,
+# MAGIC       avg(GDMP_1km_pvalue) as GDMP_1km_pvalue,
+# MAGIC       avg(GDMP_1km_slope) as GDMP_1km_slope
+# MAGIC
+# MAGIC  FROM fire_year 
+# MAGIC
+# MAGIC   LEFT JOIN EnvZones                ON fire_year.GridNum100m = EnvZones.GridNum
+# MAGIC   LEFT JOIN nuts3_2021              ON fire_year.GridNum100m = nuts3_2021.GridNum    
+# MAGIC   LEFT JOIN lULUCF_2018             ON fire_year.GridNum100m = lULUCF_2018.GridNum 
+# MAGIC   LEFT JOIN PA2022                  ON fire_year.GridNum100m = PA2022.GridNum  
+# MAGIC   LEFT JOIN GDMP_1km_99_22          ON fire_year.GridNum1km = GDMP_1km_99_22.GridNum1km 
+# MAGIC   LEFT JOIN GDMP_1km_99_22_stats    ON fire_year.GridNum1km = GDMP_1km_99_22_stats.GridNum 
+# MAGIC
+# MAGIC GROUP BY 
+# MAGIC fire_year.GridNum10km,
+# MAGIC nuts3_2021.ADM_ID,
+# MAGIC nuts3_2021.ISO2,
+# MAGIC EnvZones.Category,
+# MAGIC lULUCF_2018.LULUCF_CODE,
+# MAGIC lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC PA2022.protected_area
+# MAGIC
+# MAGIC """)
+# MAGIC
+# MAGIC fire_gdmp1km_pixel_cube.createOrReplaceTempView("fire_gdmp1km_pixel_cube")
+# MAGIC
+# MAGIC
+# MAGIC // Exporting the final table
+# MAGIC
+# MAGIC fire_gdmp1km_pixel_cube
+# MAGIC     .coalesce(1) //be careful with this
+# MAGIC     .write.format("com.databricks.spark.csv")
+# MAGIC     .mode(SaveMode.Overwrite)
+# MAGIC     .option("sep","|")
+# MAGIC     .option("overwriteSchema", "true")
+# MAGIC     .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+# MAGIC     .option("emptyValue", "")
+# MAGIC     .option("header","true")
+# MAGIC     .option("treatEmptyValuesAsNulls", "true")  
+# MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/wildfires/fire_gdmp1km_pixel_cube")
 
 # COMMAND ----------
 

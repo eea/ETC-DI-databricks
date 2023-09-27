@@ -153,7 +153,7 @@
 # MAGIC //https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=2018&fileId=1040
 # MAGIC //cwsblobstorage01/cwsblob01/Dimensions/D_fua_urban_audit2021_1040_2023831_10m
 # MAGIC
-# MAGIC
+# MAGIC // FUA 2021:
 # MAGIC
 # MAGIC // https://cwsblobstorage01.blob.core.windows.net/cwsblob01/Lookups/LUT_FUA_2021_r/20230901110357.263.csv
 # MAGIC

@@ -176,13 +176,7 @@
 # MAGIC
 # MAGIC
 # MAGIC //##########################################################################################################################################
-# MAGIC //// (6) Protected AREA (PA)  ##############################################################################                 100m DIM
-# MAGIC //##########################################################################################################################################
 # MAGIC
-# MAGIC //    https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=1910&fileId=935
-# MAGIC //    cwsblobstorage01/cwsblob01/Dimensions/D_PA2022_100m_935_20221111_100m
-# MAGIC val parquetFileDF_PA2022 = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_PA2022_100m_935_20221111_100m/")
-# MAGIC parquetFileDF_PA2022.createOrReplaceTempView("PA2022")
 # MAGIC
 # MAGIC
 # MAGIC //##########################################################################################################################################
@@ -291,9 +285,18 @@
 # MAGIC //  no data value: -9999
 # MAGIC //  cwsblobstorage01/cwsblob01/Dimensions/D_ESACCIAGB2018v3a_980_2023223_100m
 # MAGIC
-# MAGIC
+# MAGIC //https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=1955&fileId=980
 # MAGIC val parquetFileDF_AGB_2018 = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_ESACCIAGB2018v3a_980_2023223_100m/")
 # MAGIC parquetFileDF_AGB_2018.createOrReplaceTempView("AGB_2018")
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
 # MAGIC
 # MAGIC
 # MAGIC //##########################################################################################################################################
@@ -429,13 +432,54 @@
 # MAGIC                                                       """)                                  
 # MAGIC parquetFileDF_gdmp_100m_2.createOrReplaceTempView("GDMP_100m_14_22")  
 # MAGIC
+# MAGIC
+# MAGIC //-----------------------Protected area PA2022:...........................................................
+# MAGIC
+# MAGIC ///PA 100m
+# MAGIC
+# MAGIC //D_PA2022_100m_935_20221111_100m
+# MAGIC //https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=1910&fileId=935
+# MAGIC
+# MAGIC //D_PA2022_100m_935_20221111_100m
+# MAGIC /// PA2022:
+# MAGIC
+# MAGIC val PA2022_100m_v2 = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_PA2022_100m_935_20221111_100m/")             /// use load
+# MAGIC PA2022_100m_v2.createOrReplaceTempView("PA2022_100m_v2")
+# MAGIC
+# MAGIC // ------------------------------------------------
+# MAGIC // code	protection type
+# MAGIC // 1	Natura 2000 only  -n2k
+# MAGIC // 10	CDDA only
+# MAGIC // 11	Natura2000 and CDDA -nk2
+# MAGIC // 100 Emerald only
+# MAGIC // 101 Emerald and Natura 2000 * -n2k
+# MAGIC // 110	CDDA and Emerald
+# MAGIC // 111	CDDA, Natura2000 and Emerald * -n2k
+# MAGIC // -----------------------------------------
+# MAGIC
+# MAGIC val parquetFileDF_natura2000 = spark.sql(""" 
+# MAGIC Select 
+# MAGIC   gridnum,
+# MAGIC   GridNum10km,
+# MAGIC   IF(ProtectedArea2022_10m in (1,11,101,111), 'Natura2000' ,'not proteced') as natura2000_protection,
+# MAGIC   AreaHa
+# MAGIC from PA2022_100m_v2
+# MAGIC where ProtectedArea2022_10m in (1,11,101,111)
+# MAGIC """)
+# MAGIC parquetFileDF_natura2000.createOrReplaceTempView("Natura2000_100m_NET")  
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC Select * from soc_stock_ext_wetland_draft
+# MAGIC  
+# MAGIC Select 
+# MAGIC   gridnum,
+# MAGIC   GridNum10km,
+# MAGIC   IF(ProtectedArea2022_10m in (1,11,101,111), 'Natura2000' ,'not proteced') as natura2000_protection,
+# MAGIC   AreaHa
+# MAGIC from PA2022_100m_v2
+# MAGIC where ProtectedArea2022_10m in (1,11,101,111)
 # MAGIC
-# MAGIC left join LUT_wetland on wetlands_categories=FIT
 
 # COMMAND ----------
 
@@ -503,6 +547,11 @@
 
 # MAGIC %sql
 # MAGIC SELECT 
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT 
 # MAGIC   
 # MAGIC   nuts3_2021.Category, ----FOR ADMIN
 # MAGIC   
@@ -528,7 +577,8 @@
 # MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
 # MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil')) as soil_type,
 # MAGIC   env_zones.Category as env_zones,
-# MAGIC   'ISRIC 30cm for LULUCF classes CL,GL,SL)' as datasource
+# MAGIC   'ISRIC 30cm for LULUCF classes CL,GL,SL)' as datasource,
+# MAGIC   natura2000_protection
 # MAGIC   
 # MAGIC from nuts3_2021
 # MAGIC
@@ -537,6 +587,7 @@
 # MAGIC LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
 # MAGIC LEFT JOIN organic_soil on nuts3_2021.GridNum1km = organic_soil.GridNum  ------ 1km JOIN !!!!!!
 # MAGIC LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
+# MAGIC LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
 # MAGIC
 # MAGIC where nuts3_2021.ISO2 ='LU'  and lULUCF_2018.LULUCF_CODE in ('CL','GL','SL','OL')
 # MAGIC
@@ -560,6 +611,7 @@
 # MAGIC   lULUCF_2018.LULUCF_CODE,
 # MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
 # MAGIC   env_zones.Category ,
+# MAGIC   natura2000_protection ,
 # MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil'))
 
 # COMMAND ----------
@@ -598,6 +650,7 @@
 # MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
 # MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil')) as soil_type,
 # MAGIC   env_zones.Category as env_zones,
+# MAGIC   natura2000_protection,
 # MAGIC   'ISRIC 30cm for LULUCF classes CL,GL,SL)' as datasource
 # MAGIC
 # MAGIC from nuts3_2021
@@ -606,6 +659,7 @@
 # MAGIC LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
 # MAGIC LEFT JOIN organic_soil on nuts3_2021.GridNum1km = organic_soil.GridNum  ------ 1km JOIN !!!!!!
 # MAGIC LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
+# MAGIC LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
 # MAGIC
 # MAGIC where nuts3_2021.LEVEL3_code is not null and lULUCF_2018.LULUCF_CODE in ('CL','GL','SL','OL')
 # MAGIC
@@ -629,6 +683,7 @@
 # MAGIC   lULUCF_2018.LULUCF_CODE,
 # MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
 # MAGIC   env_zones.Category ,
+# MAGIC   natura2000_protection,
 # MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil'))
 # MAGIC --FL	Forest land  # CL	Cropland # GL	Grassland #SL	Settlements #WL	Wetlands #OL	Other land #null	null
 # MAGIC             """)
@@ -644,6 +699,21 @@
 # MAGIC     .option("treatEmptyValuesAsNulls", "true")  
 # MAGIC   
 # MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/SOC/SOC_STOCK_1_30cm_10km_nuts3")
+# MAGIC
+# MAGIC  SUB_CUBE_SOC_STOCK_1_30cm.createOrReplaceTempView("SOC_STOCK_1_30cm_10km_nuts3")
+
+# COMMAND ----------
+
+### Reading URL of resulting table: (for downloading to EEA greenmonkey)
+folder ="dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/SOC/SOC_STOCK_1_30cm_10km_nuts3"
+folder_output =folder[29:]
+for file in dbutils.fs.ls(folder):
+    if file.name[-2:] =="gz":
+        print ("Exported file:")
+        print(file.name)
+        print ("Exported URL:")
+        URL = "https://cwsblobstorage01.blob.core.windows.net/cwsblob01"+"/"+folder_output +"/"+file.name
+        print (URL)
 
 # COMMAND ----------
 
@@ -687,7 +757,7 @@
 # MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil')) as soil_type,
 # MAGIC   env_zones.Category as env_zones,
 # MAGIC   'ISRIC 100cm for LULUCF classes FL)' as datasource
-# MAGIC   
+# MAGIC   ,natura2000_protection
 # MAGIC
 # MAGIC from nuts3_2021
 # MAGIC
@@ -695,7 +765,7 @@
 # MAGIC LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
 # MAGIC LEFT JOIN organic_soil on nuts3_2021.GridNum1km = organic_soil.GridNum  ------ 1km JOIN !!!!!!
 # MAGIC LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
-# MAGIC
+# MAGIC LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
 # MAGIC where nuts3_2021.LEVEL3_code is not null and lULUCF_2018.LULUCF_CODE = 'FL'   ---- only for forest
 # MAGIC
 # MAGIC group by 
@@ -719,6 +789,7 @@
 # MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
 # MAGIC   env_zones.Category ,
 # MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil'))
+# MAGIC     ,natura2000_protection
 # MAGIC
 # MAGIC --FL	Forest land  # CL	Cropland # GL	Grassland #SL	Settlements #WL	Wetlands #OL	Other land #null	null
 # MAGIC             """)
@@ -734,6 +805,7 @@
 # MAGIC     .option("treatEmptyValuesAsNulls", "true")  
 # MAGIC   
 # MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/SOC/SOC_STOCK_2_100cm_nuts3")
+# MAGIC SUB_CUBE_SOC_STOCK_2_100cm.createOrReplaceTempView("SOC_STOCK_2_100cm_nuts3")
 
 # COMMAND ----------
 
@@ -880,23 +952,25 @@ for file in dbutils.fs.ls(folder):
 # MAGIC   nuts3_2021.LEVEL0_code	,
 # MAGIC   nuts3_2021.NUTS_EU,	
 # MAGIC   nuts3_2021.TAA ,
-# MAGIC CLC_2018.Category as clc18_level3_class,
+# MAGIC ----CLC_2018.Category as clc18_level3_class,
 # MAGIC ---soc_stock_ext_wetland.C_stok as wetland_c_t_per_ha 
 # MAGIC   SUM(nuts3_2021.AreaHa) as AreaHa,
 # MAGIC   SUM(soc_stock_ext_wetland.C_stok)  as SOC_STOCK_t_ext_wetland,
 # MAGIC  if( CLC_2018.Category in  (411,412,421,422,423 , 511, 512, 521, 522 , 523) ,sum(soc_stock_ext_wetland.C_stok),0) as SOC_STOCK_t_wetland,
 # MAGIC   lULUCF_2018.LULUCF_CODE,
 # MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
-# MAGIC   OrganicSoils,
+# MAGIC  ---- OrganicSoils,
 # MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil')) as soil_type,
 # MAGIC   env_zones.Category as env_zones,
 # MAGIC       'Literatur vlaues for LULUCF classes WL)' as datasource
+# MAGIC         ,natura2000_protection
 # MAGIC from nuts3_2021
 # MAGIC LEFT JOIN soc_stock_ext_wetland    on nuts3_2021.GridNum = soc_stock_ext_wetland.GridNum
 # MAGIC LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
 # MAGIC LEFT JOIN organic_soil on nuts3_2021.GridNum1km = organic_soil.GridNum  ------ 1km JOIN !!!!!!
 # MAGIC LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
 # MAGIC LEFT JOIN CLC_2018     on nuts3_2021.GridNum = CLC_2018.GridNum
+# MAGIC LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
 # MAGIC where nuts3_2021.LEVEL3_code is not null and soc_stock_ext_wetland.wetlands_categories >0 ---- only for wetlands
 # MAGIC group by 
 # MAGIC   nuts3_2021.Category,
@@ -918,8 +992,9 @@ for file in dbutils.fs.ls(folder):
 # MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
 # MAGIC   env_zones.Category , 
 # MAGIC   CLC_2018.Category,
-# MAGIC   OrganicSoils,
+# MAGIC  --- OrganicSoils,
 # MAGIC if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil'))
+# MAGIC   ,natura2000_protection
 # MAGIC             """)
 # MAGIC SUB_CUBE_SOC_STOCK_3_wetland
 # MAGIC     .coalesce(1) //be careful with this
@@ -933,6 +1008,10 @@ for file in dbutils.fs.ls(folder):
 # MAGIC     .option("treatEmptyValuesAsNulls", "true")  
 # MAGIC   
 # MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/SOC/SOC_STOCK_3_wetland_nuts3")
+# MAGIC
+# MAGIC
+# MAGIC     SUB_CUBE_SOC_STOCK_3_wetland.createOrReplaceTempView("SOC_STOCK_3_wetland_nuts3")
+# MAGIC
 
 # COMMAND ----------
 
@@ -950,10 +1029,257 @@ for file in dbutils.fs.ls(folder):
 # COMMAND ----------
 
 # MAGIC %md #### (2.1.4) DASHBOARD SOC-STOCk combine all single SOC tables 
+# MAGIC
+# MAGIC the following box will combine (union) the three single SOC table into ONE TABLE:
+# MAGIC
 
 # COMMAND ----------
 
-#####-----union --to be done
+# MAGIC %sql
+# MAGIC
+# MAGIC ---- TESTING
+# MAGIC
+# MAGIC SELECT 
+# MAGIC Category
+# MAGIC ,GridNum10km
+# MAGIC ,ADM_ID
+# MAGIC ,ADM_COUNTRY
+# MAGIC ,ISO2
+# MAGIC ,LEVEL3_name
+# MAGIC ,LEVEL2_name
+# MAGIC ,LEVEL1_name
+# MAGIC ,LEVEL0_name
+# MAGIC ,LEVEL3_code
+# MAGIC ,LEVEL2_code
+# MAGIC ,LEVEL1_code
+# MAGIC ,LEVEL0_code
+# MAGIC ,NUTS_EU
+# MAGIC ,TAA
+# MAGIC ,AreaHa
+# MAGIC ,LULUCF_CODE
+# MAGIC ,LULUCF_DESCRIPTION
+# MAGIC ,soil_type
+# MAGIC ,env_zones
+# MAGIC ,natura2000_protection
+# MAGIC ,datasource
+# MAGIC ,SOC_STOCK_isric30cm_t
+# MAGIC   ,'' SOC_STOCK_isric100cm_t
+# MAGIC
+# MAGIC   ,'' as SOC_STOCK_t_ext_wetland
+# MAGIC   ,'' as SOC_STOCK_t_wetland
+# MAGIC   FROM SOC_STOCK_1_30cm_10km_nuts3
+# MAGIC
+# MAGIC UNION ALL
+# MAGIC
+# MAGIC SELECT 
+# MAGIC Category
+# MAGIC ,GridNum10km
+# MAGIC ,ADM_ID
+# MAGIC ,ADM_COUNTRY
+# MAGIC ,ISO2
+# MAGIC ,LEVEL3_name
+# MAGIC ,LEVEL2_name
+# MAGIC ,LEVEL1_name
+# MAGIC ,LEVEL0_name
+# MAGIC ,LEVEL3_code
+# MAGIC ,LEVEL2_code
+# MAGIC ,LEVEL1_code
+# MAGIC ,LEVEL0_code
+# MAGIC ,NUTS_EU
+# MAGIC ,TAA
+# MAGIC ,AreaHa
+# MAGIC ,LULUCF_CODE
+# MAGIC ,LULUCF_DESCRIPTION
+# MAGIC ,soil_type
+# MAGIC ,env_zones
+# MAGIC ,natura2000_protection
+# MAGIC ,datasource
+# MAGIC
+# MAGIC   ,SOC_STOCK_isric100cm_t
+# MAGIC   ,'' as SOC_STOCK_isric30cm_t
+# MAGIC   ,'' as SOC_STOCK_t_ext_wetland
+# MAGIC   ,'' as SOC_STOCK_t_wetland
+# MAGIC   FROM SOC_STOCK_2_100cm_nuts3
+# MAGIC
+# MAGIC UNION ALL
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC SELECT 
+# MAGIC Category
+# MAGIC ,GridNum10km
+# MAGIC ,ADM_ID
+# MAGIC ,ADM_COUNTRY
+# MAGIC ,ISO2
+# MAGIC ,LEVEL3_name
+# MAGIC ,LEVEL2_name
+# MAGIC ,LEVEL1_name
+# MAGIC ,LEVEL0_name
+# MAGIC ,LEVEL3_code
+# MAGIC ,LEVEL2_code
+# MAGIC ,LEVEL1_code
+# MAGIC ,LEVEL0_code
+# MAGIC ,NUTS_EU
+# MAGIC ,TAA
+# MAGIC ,AreaHa
+# MAGIC ,LULUCF_CODE
+# MAGIC ,LULUCF_DESCRIPTION
+# MAGIC ,soil_type
+# MAGIC ,env_zones
+# MAGIC ,natura2000_protection
+# MAGIC ,datasource
+# MAGIC   ,'' as SOC_STOCK_isric100cm_t
+# MAGIC   ,'' as SOC_STOCK_isric30cm_t
+# MAGIC ,SOC_STOCK_t_ext_wetland
+# MAGIC   , SOC_STOCK_t_wetland
+# MAGIC   FROM SOC_STOCK_3_wetland_nuts3
+# MAGIC
+# MAGIC
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from SOC_STOCK_2_100cm_nuts3
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %scala
+# MAGIC
+# MAGIC ///UNION ALL three SOC inputs to ONE SOC table:
+# MAGIC
+# MAGIC /// example
+# MAGIC // Exporting the final table  
+# MAGIC val SUB_CUBE_SOC_STOCK_123 = spark.sql("""
+# MAGIC SELECT 
+# MAGIC Category
+# MAGIC ,GridNum10km
+# MAGIC ,ADM_ID
+# MAGIC ,ADM_COUNTRY
+# MAGIC ,ISO2
+# MAGIC ,LEVEL3_name
+# MAGIC ,LEVEL2_name
+# MAGIC ,LEVEL1_name
+# MAGIC ,LEVEL0_name
+# MAGIC ,LEVEL3_code
+# MAGIC ,LEVEL2_code
+# MAGIC ,LEVEL1_code
+# MAGIC ,LEVEL0_code
+# MAGIC ,NUTS_EU
+# MAGIC ,TAA
+# MAGIC ,AreaHa
+# MAGIC ,LULUCF_CODE
+# MAGIC ,LULUCF_DESCRIPTION
+# MAGIC ,soil_type
+# MAGIC ,env_zones
+# MAGIC ,natura2000_protection
+# MAGIC ,datasource
+# MAGIC ,SOC_STOCK_isric30cm_t
+# MAGIC   ,'' SOC_STOCK_isric100cm_t
+# MAGIC
+# MAGIC   ,'' as SOC_STOCK_t_ext_wetland
+# MAGIC   ,'' as SOC_STOCK_t_wetland
+# MAGIC   FROM SOC_STOCK_1_30cm_10km_nuts3
+# MAGIC
+# MAGIC UNION ALL
+# MAGIC
+# MAGIC SELECT 
+# MAGIC Category
+# MAGIC ,GridNum10km
+# MAGIC ,ADM_ID
+# MAGIC ,ADM_COUNTRY
+# MAGIC ,ISO2
+# MAGIC ,LEVEL3_name
+# MAGIC ,LEVEL2_name
+# MAGIC ,LEVEL1_name
+# MAGIC ,LEVEL0_name
+# MAGIC ,LEVEL3_code
+# MAGIC ,LEVEL2_code
+# MAGIC ,LEVEL1_code
+# MAGIC ,LEVEL0_code
+# MAGIC ,NUTS_EU
+# MAGIC ,TAA
+# MAGIC ,AreaHa
+# MAGIC ,LULUCF_CODE
+# MAGIC ,LULUCF_DESCRIPTION
+# MAGIC ,soil_type
+# MAGIC ,env_zones
+# MAGIC ,natura2000_protection
+# MAGIC ,datasource
+# MAGIC
+# MAGIC   ,SOC_STOCK_isric100cm_t
+# MAGIC   ,'' as SOC_STOCK_isric30cm_t
+# MAGIC   ,'' as SOC_STOCK_t_ext_wetland
+# MAGIC   ,'' as SOC_STOCK_t_wetland
+# MAGIC   FROM SOC_STOCK_2_100cm_nuts3
+# MAGIC
+# MAGIC UNION ALL
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC SELECT 
+# MAGIC Category
+# MAGIC ,GridNum10km
+# MAGIC ,ADM_ID
+# MAGIC ,ADM_COUNTRY
+# MAGIC ,ISO2
+# MAGIC ,LEVEL3_name
+# MAGIC ,LEVEL2_name
+# MAGIC ,LEVEL1_name
+# MAGIC ,LEVEL0_name
+# MAGIC ,LEVEL3_code
+# MAGIC ,LEVEL2_code
+# MAGIC ,LEVEL1_code
+# MAGIC ,LEVEL0_code
+# MAGIC ,NUTS_EU
+# MAGIC ,TAA
+# MAGIC ,AreaHa
+# MAGIC ,LULUCF_CODE
+# MAGIC ,LULUCF_DESCRIPTION
+# MAGIC ,soil_type
+# MAGIC ,env_zones
+# MAGIC ,natura2000_protection
+# MAGIC ,datasource
+# MAGIC   ,'' as SOC_STOCK_isric100cm_t
+# MAGIC   ,'' as SOC_STOCK_isric30cm_t
+# MAGIC ,SOC_STOCK_t_ext_wetland
+# MAGIC   , SOC_STOCK_t_wetland
+# MAGIC   FROM SOC_STOCK_3_wetland_nuts3
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC             """)
+# MAGIC SUB_CUBE_SOC_STOCK_123
+# MAGIC     .coalesce(1) //be careful with this
+# MAGIC     .write.format("com.databricks.spark.csv")
+# MAGIC     .mode(SaveMode.Overwrite)
+# MAGIC     .option("sep","|")
+# MAGIC     .option("overwriteSchema", "true")
+# MAGIC     .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+# MAGIC     .option("emptyValue", "")
+# MAGIC     .option("header","true")
+# MAGIC     .option("treatEmptyValuesAsNulls", "true")  
+# MAGIC   
+# MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/SOC/SOC_STOCK_123")
+# MAGIC
+# MAGIC
+# MAGIC     SUB_CUBE_SOC_STOCK_123.createOrReplaceTempView("SOC_STOCK_123")
+# MAGIC
+
+# COMMAND ----------
+
+### Reading URL of resulting table: (for downloading to EEA greenmonkey)
+folder ="dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/SOC/SOC_STOCK_123"
+folder_output =folder[29:]
+for file in dbutils.fs.ls(folder):
+    if file.name[-2:] =="gz":
+        print ("Exported file:")
+        print(file.name)
+        print ("Exported URL:")
+        URL = "https://cwsblobstorage01.blob.core.windows.net/cwsblob01"+"/"+folder_output +"/"+file.name
+        print (URL)
 
 # COMMAND ----------
 
@@ -1228,6 +1554,8 @@ for file in dbutils.fs.ls(folder):
 # MAGIC   nuts3_2021.LEVEL0_code	,
 # MAGIC   nuts3_2021.NUTS_EU,	
 # MAGIC   nuts3_2021.TAA ,
+# MAGIC   natura2000_protection,
+# MAGIC
 # MAGIC
 # MAGIC   sum(nuts3_2021.AreaHa) as AreaHa,
 # MAGIC
@@ -1278,6 +1606,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC
 # MAGIC LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
 # MAGIC LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
+# MAGIC LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
 # MAGIC
 # MAGIC
 # MAGIC where nuts3_2021.LEVEL3_code is not null and lULUCF_2018.LULUCF_CODE in ('CL','GL','SL','OL')
@@ -1333,6 +1662,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC   nuts3_2021.LEVEL0_code	,
 # MAGIC   nuts3_2021.NUTS_EU,	
 # MAGIC   nuts3_2021.TAA ,
+# MAGIC     natura2000_protection,
 # MAGIC   lULUCF_2018.LULUCF_CODE,
 # MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
 # MAGIC   if(organic_soil.OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil')),
@@ -1369,7 +1699,7 @@ df = sql_for_panda.select("*").toPandas()
 
 #df_transformed =df.melt(id_vars=['Category',	'GridNum10km',	'ADM_ID',	'ADM_COUNTRY',	'ISO2',	'LEVEL3_name',	'LEVEL2_name',	'LEVEL1_name',	'LEVEL0_name',	'LEVEL3_code',	'LEVEL2_code',	'LEVEL1_code',	'LEVEL0_code',	'NUTS_EU',	'TAA',	'LULUCF_CODE',	'LULUCF_DESCRIPTION',	'soil_type',	'env_zones', ], var_name="year", value_name="soc")
 
-df_transformed =df.melt(id_vars=['GridNum10km',	'ADM_COUNTRY',	'ISO2', 'LEVEL3_code',	'TAA',	'LULUCF_CODE',	'soil_type',	'env_zones', ], var_name="year", value_name="soc")
+df_transformed =df.melt(id_vars=['ADM_COUNTRY',	'ISO2', 'LEVEL3_code',	'TAA',	'LULUCF_CODE',	'soil_type',	'env_zones','natura2000_protection' ], var_name="year", value_name="soc")
 
 #df_transformed =df.melt(id_vars=['Category','ADM_ID',	'ADM_COUNTRY',	'ISO2',	'LEVEL3_name',	'LEVEL2_name',	'LEVEL1_name',	'LEVEL0_name',	'LEVEL3_code',	'LEVEL2_code',	'LEVEL1_code',	'LEVEL0_code',	'NUTS_EU',	'TAA',	'LULUCF_CODE',	'LULUCF_DESCRIPTION',	'soil_type',	'env_zones', 'AreaHa'], var_name="year", value_name="soc")
 
@@ -1526,6 +1856,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil')) as soil_type,
 # MAGIC   env_zones.Category as env_zones,
 # MAGIC   SUM(nuts3_2021.AreaHa) as AreaHa,
+# MAGIC   natura2000_protection,
 # MAGIC
 # MAGIC  float(NULL) as GDMP_2018  ,
 # MAGIC   SUM(AGB_2018.esacciagb2018)  as esacciagb2018,        -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
@@ -1540,6 +1871,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
 # MAGIC LEFT JOIN organic_soil on nuts3_2021.GridNum1km = organic_soil.GridNum  ------ 1km JOIN !!!!!!
 # MAGIC LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
+# MAGIC LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
 # MAGIC
 # MAGIC where  nuts3_2021.LEVEL3_code is not null  and lULUCF_2018.LULUCF_CODE in ('FL','SL')
 # MAGIC
@@ -1564,6 +1896,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
 # MAGIC   env_zones.Category ,
 # MAGIC   if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil'))
+# MAGIC   ,natura2000_protection
 # MAGIC
 # MAGIC """)
 # MAGIC
@@ -1722,6 +2055,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC     SUM(AGB_2018.esacciagbsd2018)  as esacciagbsd2018,    -- per-pixel estimates of above-ground biomass uncertainty expressed as the standard deviation in Mg/ha (raster dataset)
 # MAGIC     SUM(AGB_2018.esacciagb2018)  as AGB_biomass_t, -- check  
 # MAGIC     'ESA CCI AGB 2018 for LULUCF classes CL (but only for CLC_2018 classes in (224,221, 223,223) )' as datasource
+# MAGIC     ,natura2000_protection
 # MAGIC
 # MAGIC
 # MAGIC   from nuts3_2021
@@ -1731,6 +2065,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC   LEFT JOIN organic_soil on nuts3_2021.GridNum1km = organic_soil.GridNum  ------ 1km JOIN !!!!!!
 # MAGIC   LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
 # MAGIC   LEFT JOIN CLC_2018     on nuts3_2021.GridNum = CLC_2018.GridNum ---
+# MAGIC   LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
 # MAGIC   where  nuts3_2021.LEVEL3_code is not null  and lULUCF_2018.LULUCF_CODE in ('CL') and CLC_2018.Category in (224,221, 223,223)
 # MAGIC
 # MAGIC   group by 
@@ -1754,6 +2089,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC     lULUCF_2018.LULUCF_CODE,
 # MAGIC     lULUCF_2018.LULUCF_DESCRIPTION,
 # MAGIC     env_zones.Category ,
+# MAGIC    natura2000_protection,
 # MAGIC     if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil'))
 # MAGIC   -----if(CLC_2018.Category =224,'Agro-forestry areas', if(CLC_2018.Category in (221, 223,223),'Permanent crops','other clc'))
 # MAGIC """)
@@ -1814,6 +2150,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC           nuts3_2021.TAA ,
 # MAGIC           lULUCF_2018.LULUCF_CODE,
 # MAGIC           lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC           natura2000_protection,
 # MAGIC           if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil')) as soil_type,
 # MAGIC           env_zones.Category as env_zones,
 # MAGIC           SUM(nuts3_2021.AreaHa) as AreaHa,
@@ -1829,6 +2166,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC         LEFT JOIN organic_soil       on nuts3_2021.GridNum1km = organic_soil.GridNum  ------ 1km JOIN !!!!!!
 # MAGIC         LEFT JOIN env_zones          on nuts3_2021.GridNum =    env_zones.GridNum
 # MAGIC       ----- LEFT JOIN CLC_2018           on nuts3_2021.GridNum =    CLC_2018.GridNum ---
+# MAGIC       LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
 # MAGIC         where         nuts3_2021.GridNum10km=9419829647769600   -----nuts3_2021.LEVEL3_code is not null  and lULUCF_2018.LULUCF_CODE in ('GL') AND
 # MAGIC   
 # MAGIC       group by 
@@ -1852,6 +2190,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC           lULUCF_2018.LULUCF_CODE,
 # MAGIC           lULUCF_2018.LULUCF_DESCRIPTION,
 # MAGIC           env_zones.Category ,
+# MAGIC           natura2000_protection,
 # MAGIC           if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil'))
 
 # COMMAND ----------
@@ -1885,13 +2224,15 @@ for file in dbutils.fs.ls(folder):
 # MAGIC           float(NULL) as esacciagbsd2018,
 # MAGIC           sum(GDMP_100m_14_22.GDMP_2018/1000) as GDMP_2018,    ---kg/ha into t/ha
 # MAGIC           sum(GDMP_100m_14_22.GDMP_2018/1000) as AGB_biomass_t,---kg/ha into t/ha
-# MAGIC          'GDMP 100m - 2018 for LULUCF classes GL' as datasource
+# MAGIC          'GDMP 100m - 2018 for LULUCF classes GL' as datasource,
+# MAGIC           natura2000_protection
 # MAGIC         from nuts3_2021
 # MAGIC         LEFT JOIN GDMP_100m_14_22     on nuts3_2021.GridNum = GDMP_100m_14_22.GridNum 
 # MAGIC         LEFT JOIN lULUCF_2018        on nuts3_2021.GridNum =    lULUCF_2018.GridNum
 # MAGIC         LEFT JOIN organic_soil       on nuts3_2021.GridNum1km = organic_soil.GridNum  ------ 1km JOIN !!!!!!
 # MAGIC         LEFT JOIN env_zones          on nuts3_2021.GridNum =    env_zones.GridNum
 # MAGIC       ----- LEFT JOIN CLC_2018           on nuts3_2021.GridNum =    CLC_2018.GridNum ---
+# MAGIC       LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
 # MAGIC         where  nuts3_2021.LEVEL3_code is not null  and lULUCF_2018.LULUCF_CODE in ('GL')
 # MAGIC       group by 
 # MAGIC           nuts3_2021.Category,
@@ -1913,6 +2254,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC           lULUCF_2018.LULUCF_CODE,
 # MAGIC           lULUCF_2018.LULUCF_DESCRIPTION,
 # MAGIC           env_zones.Category ,
+# MAGIC           natura2000_protection,
 # MAGIC           if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil'))
 # MAGIC
 # MAGIC """)
@@ -2096,6 +2438,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC       ,LULUCF_DESCRIPTION
 # MAGIC       ,soil_type
 # MAGIC       ,env_zones
+# MAGIC       ,natura2000_protection
 # MAGIC       ,float(AreaHa) as  AreaHa
 # MAGIC       ,float(GDMP_2018) as  GDMP_2018
 # MAGIC       ,float(esacciagb2018) as  esacciagb2018
@@ -2125,6 +2468,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC       ,LULUCF_DESCRIPTION
 # MAGIC       ,soil_type
 # MAGIC       ,env_zones
+# MAGIC          ,natura2000_protection
 # MAGIC       ,float(AreaHa) as  AreaHa
 # MAGIC       ,float(GDMP_2018) as  GDMP_2018
 # MAGIC       ,float(esacciagb2018) as  esacciagb2018
@@ -2154,6 +2498,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC       ,LULUCF_DESCRIPTION
 # MAGIC       ,soil_type
 # MAGIC       ,env_zones
+# MAGIC          ,natura2000_protection
 # MAGIC       ,float(AreaHa) as  AreaHa
 # MAGIC       ,float(GDMP_2018) as  GDMP_2018
 # MAGIC       ,float(esacciagb2018) as  esacciagb2018
@@ -2207,6 +2552,14 @@ for file in dbutils.fs.ls(folder):
 
 # COMMAND ----------
 
+# MAGIC %md #### (2.4,1) AGB FLUX -testings
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
 # MAGIC %md ### (2.5) BGB STOCK
 # MAGIC ![](https://github.com/eea/ETC-DI-databricks/blob/main/images/bgb.JPG?raw=true?raw=true?raw=true)
 
@@ -2241,7 +2594,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC         nuts3_2021.LEVEL0_code	,
 # MAGIC         nuts3_2021.NUTS_EU,	
 # MAGIC         nuts3_2021.TAA ,
-# MAGIC
+# MAGIC natura2000_protection,
 # MAGIC         SUM(nuts3_2021.AreaHa) as AreaHa,
 # MAGIC
 # MAGIC         SUM(BGB_forest_2020.FCM_Europe_demo_2020_BGB)  as FCM_Europe_demo_2020_BGB,        -- 
@@ -2259,7 +2612,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC       LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
 # MAGIC       LEFT JOIN organic_soil on nuts3_2021.GridNum1km = organic_soil.GridNum  ------ 1km JOIN !!!!!!
 # MAGIC       LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
-# MAGIC
+# MAGIC LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
 # MAGIC       where  nuts3_2021.LEVEL3_code is not null  and lULUCF_2018.LULUCF_CODE in ('FL')
 # MAGIC  
 # MAGIC       group by 
@@ -2283,6 +2636,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC         lULUCF_2018.LULUCF_CODE,
 # MAGIC         lULUCF_2018.LULUCF_DESCRIPTION,
 # MAGIC         env_zones.Category ,
+# MAGIC         natura2000_protection,
 # MAGIC         if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil'))
 # MAGIC
 # MAGIC       
@@ -2320,7 +2674,9 @@ for file in dbutils.fs.ls(folder):
 # MAGIC         lULUCF_2018.LULUCF_CODE,
 # MAGIC         lULUCF_2018.LULUCF_DESCRIPTION,
 # MAGIC         if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil')) as soil_type,
+# MAGIC         natura2000_protection,
 # MAGIC         env_zones.Category as env_zones
+# MAGIC
 # MAGIC         
 # MAGIC
 # MAGIC       from nuts3_2021
@@ -2329,7 +2685,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC       LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
 # MAGIC       LEFT JOIN organic_soil on nuts3_2021.GridNum1km = organic_soil.GridNum  ------ 1km JOIN !!!!!!
 # MAGIC       LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
-# MAGIC
+# MAGIC LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
 # MAGIC       where  nuts3_2021.LEVEL3_code is not null  and lULUCF_2018.LULUCF_CODE in ('FL')
 # MAGIC  
 # MAGIC       group by 
@@ -2353,6 +2709,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC         lULUCF_2018.LULUCF_CODE,
 # MAGIC         lULUCF_2018.LULUCF_DESCRIPTION,
 # MAGIC         env_zones.Category ,
+# MAGIC         natura2000_protection,
 # MAGIC         if(OrganicSoils =2,'organic soils', if(OrganicSoils=1,'mineral soils','unknown soil'))
 # MAGIC
 # MAGIC
