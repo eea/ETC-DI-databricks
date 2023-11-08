@@ -1,16 +1,27 @@
 # Databricks notebook source
-# MAGIC %md # Carbon mapping
+# MAGIC %md # Carbon mapping  - Above ground biomass (AGB) -based on ESA CCI
+# MAGIC
+# MAGIC https://climate.esa.int/en/odp/#/project/biomass
+# MAGIC
+# MAGIC Carbon mapping is a critical endeavor in our efforts to better understand and combat climate change. One fundamental aspect of this mapping process is the assessment of Above Ground Biomass (AGB), which refers to the total mass of living vegetation and trees found in a specific area. Accurate AGB measurements are pivotal in estimating carbon stocks and fluxes, as trees and plants play a vital role in sequestering carbon dioxide from the atmosphere. The European Space Agency (ESA) Climate Change Initiative (CCI) has emerged as a key player in advancing our capabilities in AGB assessment and carbon mapping, harnessing the power of satellite technology and sophisticated data analysis techniques to provide valuable insights into our planet's carbon dynamics. In this exploration, we delve into the world of AGB-based carbon mapping and how the ESA CCI contributes to this crucial scientific endeavor.
+# MAGIC
+# MAGIC This notebook extracts all existing AGB datasets and builds a CUBE from them. 
+# MAGIC Datasource information: https://climate.esa.int/media/documents/D4.3_CCI_PUG_V4.0_20230605.pdf
+# MAGIC info: loehnertz@space4environment.com
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC
-# MAGIC ![](...images/AGB_time_series.png?raw=true)
+# MAGIC ![](https://github.com/eea/ETC-DI-databricks/blob/main/images/AGB_time_series.png?raw=true?raw=true)
+# MAGIC
 # MAGIC
 
 # COMMAND ----------
 
 # MAGIC %md ## 1) Reading DIMs  
+# MAGIC LETS START WITH READING THE INPUT DATA.
+# MAGIC
 # MAGIC the following box reads all single DIMS and LUT from Azure:
 
 # COMMAND ----------
@@ -219,6 +230,14 @@
 # MAGIC
 # MAGIC
 # MAGIC
+# MAGIC // AGB CHANGE: Quality flag integer values:
+# MAGIC // 0: AGB=0 in both maps
+# MAGIC // 1: AGB loss
+# MAGIC // 2: Potential AGB loss
+# MAGIC // 3: Improbable change
+# MAGIC // 4: Potential AGB gain
+# MAGIC // 5: AGB gain
+# MAGIC
 # MAGIC //// 15 (AGB 2020)ESA CCI Above Ground Biomass 2020 v4 ############################## 1 100m DIM CHANGES:...........
 # MAGIC //https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=1998&fileId=1020
 # MAGIC //cwsblobstorage01/cwsblob01/Dimensions/D_esa20202010agb_1020_202375_100m
@@ -238,7 +257,7 @@
 # MAGIC parquetFileDF_AGB_20192018.createOrReplaceTempView("AGB_2019_2018")
 # MAGIC
 # MAGIC //// 18 (AGB 2020)ESA CCI Above Ground Biomass 2020 v4 ############################## 1 100m DIM
-# MAGIC //https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=1999&fileId=1021
+# MAGIC //
 # MAGIC //cwsblobstorage01/cwsblob01/Dimensions/D_esaagb20202019_1021_202375_100m
 # MAGIC val parquetFileDF_AGB_20202019 = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_esaagb20202019_1021_202375_100m/")
 # MAGIC parquetFileDF_AGB_20202019.createOrReplaceTempView("AGB_2020_2019")
@@ -278,54 +297,126 @@
 # MAGIC where ProtectedArea2022_10m in (1,11,101,111)
 # MAGIC """)
 # MAGIC parquetFileDF_natura2000.createOrReplaceTempView("Natura2000_100m_NET")  
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
 
 # COMMAND ----------
 
 # MAGIC %md ## 2) Building & testing CUBES
 # MAGIC The following lines constructed a JOIN between all single tables and transforme it to an data-cube:
+# MAGIC
+# MAGIC https://www.markdownguide.org/basic-syntax/
 
 # COMMAND ----------
 
-# MAGIC %sql
+# MAGIC %md ### 2.1 ) Building F-CUBE
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC
-# MAGIC ---SELECT 
-# MAGIC ---  nuts3_2021.Category, ----FOR ADMIN
-# MAGIC ---  nuts3_2021.GridNum10km,
-# MAGIC ---  nuts3_2021.ADM_ID,
-# MAGIC ---  nuts3_2021.ADM_COUNTRY	,
-# MAGIC ---  nuts3_2021.ISO2	,
-# MAGIC ---  nuts3_2021.LEVEL3_name	,
-# MAGIC ---  nuts3_2021.LEVEL2_name	,
-# MAGIC ---  nuts3_2021.LEVEL1_name	,
-# MAGIC ---  nuts3_2021.LEVEL0_name	,
-# MAGIC ---  nuts3_2021.LEVEL3_code	,
-# MAGIC ---  nuts3_2021.LEVEL2_code	,
-# MAGIC ---  nuts3_2021.LEVEL1_code	,
-# MAGIC ---  nuts3_2021.LEVEL0_code	,
-# MAGIC ---  nuts3_2021.NUTS_EU,	
-# MAGIC ---  nuts3_2021.TAA ,
-# MAGIC ---  lULUCF_2018.LULUCF_CODE,
-# MAGIC ---  lULUCF_2018.LULUCF_DESCRIPTION,
-# MAGIC ---  nuts3_2021.AreaHa,
-# MAGIC ---
-# MAGIC ---  natura2000_protection,
-# MAGIC ---
-# MAGIC ---  AGB_2010.esacci2010_etrs89 as esacciagb2010,-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
-# MAGIC ---  AGB_2017.esacci_2017_NN_100m as esacciagb2017,-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
-# MAGIC ---  AGB_2018.esacciagb2018, -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
-# MAGIC ---  AGB_2020.ESA_CCI_AGB_2020 as esacciagb2020,-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
-# MAGIC ---'ESA CCI AGB' as datasource --- info
-# MAGIC ---
-# MAGIC ---from nuts3_2021
-# MAGIC ---
-# MAGIC ---LEFT JOIN AGB_2010     on nuts3_2021.GridNum = AGB_2010.gridnum
-# MAGIC ---LEFT JOIN AGB_2017     on nuts3_2021.GridNum = AGB_2017.gridnum
-# MAGIC ---LEFT JOIN AGB_2018     on nuts3_2021.GridNum = AGB_2018.gridnum
-# MAGIC ---LEFT JOIN AGB_2020     on nuts3_2021.GridNum = AGB_2020.gridnum
-# MAGIC ---
-# MAGIC ---LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
-# MAGIC ---LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
-# MAGIC ---where  nuts3_2021.LEVEL3_code is not null  
+# MAGIC > #### The following box creates a large "CUBE"  
+# MAGIC > 
+# MAGIC > ###### There, ALL the required single DIMS are connected to the ADMIN-DIM. The resolution of the CUBE is 1ha. 
+# MAGIC >
+# MAGIC > Analysis DIMS:
+# MAGIC - NUTS3
+# MAGIC - Env.Zones
+# MAGIC - Protected Areas
+# MAGIC - LULUCF Categories
+# MAGIC > AGB STATUS DIMS:
+# MAGIC - AGB_2010 biomass t/ha
+# MAGIC - AGB_2010 standard deviation (SD)
+# MAGIC - AGB_2017 biomass t/ha
+# MAGIC - AGB_2017 standard deviation (SD)
+# MAGIC - AGB_2018 biomass t/ha
+# MAGIC - AGB_2018 standard deviation (SD)
+# MAGIC - AGB_2020 biomass t/ha
+# MAGIC - AGB_2020 standard deviation (SD)
+# MAGIC > AGB CAHNGE DIMS:
+# MAGIC - AGB_2020_2010 Quality flag (QF)
+# MAGIC - AGB_2020_2010 standard deviation (SD)
+# MAGIC - AGB_2018_2017 Quality flag (QF)
+# MAGIC - AGB_2018_2017 standard deviation (SD)
+# MAGIC - AGB_2019_2018 Quality flag (QF)
+# MAGIC - AGB_2019_2018 standard deviation (SD) 
+# MAGIC - AGB_2020_2019	Quality flag (QF)
+# MAGIC - AGB_2020_2019	standard deviation (SD)
+# MAGIC
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %sql  -- testing and checking SQL for the final query (next box)
+# MAGIC
+# MAGIC --SELECT 
+# MAGIC --  nuts3_2021.Category, ----FOR ADMIN
+# MAGIC --  nuts3_2021.GridNum10km,
+# MAGIC --  nuts3_2021.ADM_ID,
+# MAGIC --  nuts3_2021.ADM_COUNTRY	,
+# MAGIC --  nuts3_2021.ISO2	,
+# MAGIC --  nuts3_2021.LEVEL3_name	,
+# MAGIC --  nuts3_2021.LEVEL2_name	,
+# MAGIC --  nuts3_2021.LEVEL1_name	,
+# MAGIC --  nuts3_2021.LEVEL0_name	,
+# MAGIC --  nuts3_2021.LEVEL3_code	,
+# MAGIC --  nuts3_2021.LEVEL2_code	,
+# MAGIC --  nuts3_2021.LEVEL1_code	,
+# MAGIC --  nuts3_2021.LEVEL0_code	,
+# MAGIC --  nuts3_2021.NUTS_EU,	
+# MAGIC --  nuts3_2021.TAA ,
+# MAGIC --  lULUCF_2018.LULUCF_CODE,
+# MAGIC --  lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC --  nuts3_2021.AreaHa,
+# MAGIC --
+# MAGIC --  natura2000_protection,
+# MAGIC --  env_zones.Category as env_zones,
+# MAGIC --
+# MAGIC ----STATUS:
+# MAGIC --  AGB_2010.esacci2010_etrs89    as agb_2010,   -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) 
+# MAGIC --  AGB_2017.esacci_2017_NN_100m  as agb_2017,   -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha)  
+# MAGIC --  AGB_2018.esacciagb2018        as agb_2018,   -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) 
+# MAGIC --  AGB_2020.ESA_CCI_AGB_2020     as agb_2020,   -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) 
+# MAGIC --
+# MAGIC --  AGB_2010.esaccisd2010_etrs89    as SD_2010,--per-pixel estimates of above-ground biomass uncertainty expressed as the standard deviation in Mg/ha
+# MAGIC --  AGB_2017.esacci_SD2017_NN_100m  as SD_2017,--per-pixel estimates of above-ground biomass uncertainty expressed as the standard deviation in Mg/ha
+# MAGIC --  AGB_2018.esacciagbsd2018        as SD_2018,--per-pixel estimates of above-ground biomass uncertainty expressed as the standard deviation in Mg/ha
+# MAGIC --  AGB_2020.ESA_CCI_AGB_2020_SD    as SD_2020,--per-pixel estimates of above-ground biomass uncertainty expressed as the standard deviation in Mg/ha
+# MAGIC --
+# MAGIC -----CHANGE:
+# MAGIC --    AGB_2020_2010.ESA_CCI_AGB_2020_2010_QF_v2   as AGB_2020_2010_QF,
+# MAGIC --    AGB_2018_2017.ESA_CCI_AGB_2018_2017_QF_v2	as AGB_2018_2017_QF,
+# MAGIC --    AGB_2019_2018.ESA_CCI_AGB_2019_2018_QF_v2   as AGB_2019_2018_QF,
+# MAGIC --    AGB_2020_2019.ESA_CCI_AGB_2020_2019_QF	    as AGB_2020_2019_QF,
+# MAGIC --
+# MAGIC --    AGB_2020_2010.ESA_CCI_AGB_2020_2010_SD_v2   as AGB_2020_2010_SD,
+# MAGIC --    AGB_2018_2017.ESA_CCI_AGB_2018_2017_SD_v2   as AGB_2018_2017_SD,
+# MAGIC --    AGB_2019_2018.ESA_CCI_AGB_2019_2018_SD_v2   as AGB_2019_2018_SD,
+# MAGIC --    AGB_2020_2019.ESA_CCI_AGB_2020_2019_SD      as AGB_2020_2019_SD,
+# MAGIC --
+# MAGIC --    'ESA CCI AGB' as datasource --- info
+# MAGIC --
+# MAGIC --
+# MAGIC --from nuts3_2021
+# MAGIC --
+# MAGIC --LEFT JOIN AGB_2010     on nuts3_2021.GridNum = AGB_2010.gridnum
+# MAGIC --LEFT JOIN AGB_2017     on nuts3_2021.GridNum = AGB_2017.gridnum
+# MAGIC --LEFT JOIN AGB_2018     on nuts3_2021.GridNum = AGB_2018.gridnum
+# MAGIC --LEFT JOIN AGB_2020     on nuts3_2021.GridNum = AGB_2020.gridnum
+# MAGIC --
+# MAGIC --LEFT JOIN AGB_2020_2010 on   nuts3_2021.GridNum =AGB_2020_2010.gridnum   
+# MAGIC --LEFT JOIN AGB_2018_2017 on	 nuts3_2021.GridNum =AGB_2018_2017.gridnum	
+# MAGIC --LEFT JOIN AGB_2019_2018 on   nuts3_2021.GridNum =AGB_2019_2018.gridnum   
+# MAGIC --LEFT JOIN AGB_2020_2019 on   nuts3_2021.GridNum =AGB_2020_2019.gridnum
+# MAGIC --
+# MAGIC --
+# MAGIC --LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
+# MAGIC --LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
+# MAGIC --LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
+# MAGIC --where  nuts3_2021.LEVEL3_code is not null  
 # MAGIC
 # MAGIC
 # MAGIC
@@ -333,21 +424,57 @@
 # COMMAND ----------
 
 # MAGIC %scala
-# MAGIC /// build up cube: ESA_CCI_CUBE 
-# MAGIC // the following script produce a tabel with the name: [AESA_CCI_CUBE]
+# MAGIC
+# MAGIC // the following script produce a temp-table with the name: [ESA_CCI_CUBE]
+# MAGIC
 # MAGIC val ESA_CCI_CUBE = spark.sql("""
-# MAGIC     SELECT 
+# MAGIC   
+# MAGIC SELECT 
+# MAGIC   nuts3_2021.Category, ----FOR ADMIN
 # MAGIC   nuts3_2021.GridNum10km,
+# MAGIC   nuts3_2021.ADM_ID,
+# MAGIC   nuts3_2021.ADM_COUNTRY	,
 # MAGIC   nuts3_2021.ISO2	,
+# MAGIC   nuts3_2021.LEVEL3_name	,
+# MAGIC   nuts3_2021.LEVEL2_name	,
+# MAGIC   nuts3_2021.LEVEL1_name	,
+# MAGIC   nuts3_2021.LEVEL0_name	,
 # MAGIC   nuts3_2021.LEVEL3_code	,
+# MAGIC   nuts3_2021.LEVEL2_code	,
+# MAGIC   nuts3_2021.LEVEL1_code	,
+# MAGIC   nuts3_2021.LEVEL0_code	,
+# MAGIC   nuts3_2021.NUTS_EU,	
 # MAGIC   nuts3_2021.TAA ,
 # MAGIC   lULUCF_2018.LULUCF_CODE,
+# MAGIC   lULUCF_2018.LULUCF_DESCRIPTION,
+# MAGIC   nuts3_2021.AreaHa,
 # MAGIC
-# MAGIC   SUM(nuts3_2021.AreaHa) as AreaHa,
-# MAGIC   SUM(AGB_2010.esacci2010_etrs89) as esacciagb2010,-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
-# MAGIC   SUM(AGB_2017.esacci_2017_NN_100m) as esacciagb2017,-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
-# MAGIC   SUM(AGB_2018.esacciagb2018), -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
-# MAGIC   SUM(AGB_2020.ESA_CCI_AGB_2020) as esacciagb2020-- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) (raster dataset). 
+# MAGIC   natura2000_protection,
+# MAGIC   env_zones.Category as env_zones,
+# MAGIC
+# MAGIC --STATUS:
+# MAGIC   AGB_2010.esacci2010_etrs89    as agb_2010,   -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) 
+# MAGIC   AGB_2017.esacci_2017_NN_100m  as agb_2017,   -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha)  
+# MAGIC   AGB_2018.esacciagb2018        as agb_2018,   -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) 
+# MAGIC   AGB_2020.ESA_CCI_AGB_2020     as agb_2020,   -- above ground biomass (AGB, unit: tons/ha i.e., Mg/ha) 
+# MAGIC
+# MAGIC   AGB_2010.esaccisd2010_etrs89    as SD_2010,--per-pixel estimates of above-ground biomass uncertainty expressed as the standard deviation in Mg/ha
+# MAGIC   AGB_2017.esacci_SD2017_NN_100m  as SD_2017,--per-pixel estimates of above-ground biomass uncertainty expressed as the standard deviation in Mg/ha
+# MAGIC   AGB_2018.esacciagbsd2018        as SD_2018,--per-pixel estimates of above-ground biomass uncertainty expressed as the standard deviation in Mg/ha
+# MAGIC   AGB_2020.ESA_CCI_AGB_2020_SD    as SD_2020,--per-pixel estimates of above-ground biomass uncertainty expressed as the standard deviation in Mg/ha
+# MAGIC
+# MAGIC ---CHANGE:
+# MAGIC     AGB_2020_2010.ESA_CCI_AGB_2020_2010_QF_v2   as AGB_2020_2010_QF,
+# MAGIC     AGB_2018_2017.ESA_CCI_AGB_2018_2017_QF_v2	as AGB_2018_2017_QF,
+# MAGIC     AGB_2019_2018.ESA_CCI_AGB_2019_2018_QF_v2   as AGB_2019_2018_QF,
+# MAGIC     AGB_2020_2019.ESA_CCI_AGB_2020_2019_QF	    as AGB_2020_2019_QF,
+# MAGIC
+# MAGIC     AGB_2020_2010.ESA_CCI_AGB_2020_2010_SD_v2   as AGB_2020_2010_SD,
+# MAGIC     AGB_2018_2017.ESA_CCI_AGB_2018_2017_SD_v2   as AGB_2018_2017_SD,
+# MAGIC     AGB_2019_2018.ESA_CCI_AGB_2019_2018_SD_v2   as AGB_2019_2018_SD,
+# MAGIC     AGB_2020_2019.ESA_CCI_AGB_2020_2019_SD      as AGB_2020_2019_SD,
+# MAGIC
+# MAGIC     'ESA CCI AGB' as datasource --- info
 # MAGIC
 # MAGIC
 # MAGIC from nuts3_2021
@@ -356,16 +483,18 @@
 # MAGIC LEFT JOIN AGB_2017     on nuts3_2021.GridNum = AGB_2017.gridnum
 # MAGIC LEFT JOIN AGB_2018     on nuts3_2021.GridNum = AGB_2018.gridnum
 # MAGIC LEFT JOIN AGB_2020     on nuts3_2021.GridNum = AGB_2020.gridnum
-# MAGIC LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
 # MAGIC
+# MAGIC LEFT JOIN AGB_2020_2010 on   nuts3_2021.GridNum =AGB_2020_2010.gridnum   
+# MAGIC LEFT JOIN AGB_2018_2017 on	 nuts3_2021.GridNum =AGB_2018_2017.gridnum	
+# MAGIC LEFT JOIN AGB_2019_2018 on   nuts3_2021.GridNum =AGB_2019_2018.gridnum   
+# MAGIC LEFT JOIN AGB_2020_2019 on   nuts3_2021.GridNum =AGB_2020_2019.gridnum
+# MAGIC
+# MAGIC
+# MAGIC LEFT JOIN lULUCF_2018  on nuts3_2021.GridNum = lULUCF_2018.GridNum
+# MAGIC LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
+# MAGIC LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
 # MAGIC where  nuts3_2021.LEVEL3_code is not null  
 # MAGIC
-# MAGIC group by 
-# MAGIC   nuts3_2021.GridNum10km,
-# MAGIC   nuts3_2021.ISO2	,
-# MAGIC   nuts3_2021.LEVEL3_code	,
-# MAGIC   nuts3_2021.TAA ,
-# MAGIC   lULUCF_2018.LULUCF_CODE
 # MAGIC
 # MAGIC
 # MAGIC """)
@@ -391,7 +520,179 @@
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC No, you can use the F-cube: **ESA_CCI_CUBE** in the next queries: for example ''' select * from ESA_CCI_CUBE '''
 
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC Select * from ESA_CCI_CUBE
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SHOW COLUMNS IN ESA_CCI_CUBE
+
+# COMMAND ----------
+
+# MAGIC %md ### 2.2) Building "C-CUBE" 
+# MAGIC - Selected DIMS (AGB) will be aggregated to analysis DIMS (nuts, pa, env,)
+
+# COMMAND ----------
+
+# MAGIC %sql --- C-CUBE 1: 
+# MAGIC SELECT 
+# MAGIC ISO2
+# MAGIC , LEVEL3_code
+# MAGIC , TAA
+# MAGIC ,ifnull(LULUCF_CODE,'no_LULUCF_CODE')  as LULUCF_CODE  --- set NULL to a better "value" to be able to join 
+# MAGIC ,ifnull(LULUCF_DESCRIPTION,'no_LULUCF_CODE')  as LULUCF_DESCRIPTION --- set NULL to a better "value" to be able to join 
+# MAGIC ,ifnull(natura2000_protection,'no_protection')  as natura2000_protection --- set NULL to a better "value" to be able to join 
+# MAGIC ,ifnull(env_zones,'no_env_zones')  as env_zones --- set NULL to a better "value" to be able to join 
+# MAGIC
+# MAGIC , sum(AreaHa) as AreaHa
+# MAGIC --- SUM into Tonnes: 
+# MAGIC , sum(agb_2010) as agb_2010
+# MAGIC , sum(agb_2017) as agb_2017
+# MAGIC , sum(agb_2018) as agb_2018
+# MAGIC , sum(agb_2020) as agb_2020
+# MAGIC --- weighted avg SD : 
+# MAGIC ,SUM(SD_2010)/ sum(AreaHa)   as SD_2010
+# MAGIC ,SUM(SD_2017)/ sum(AreaHa)   as SD_2017
+# MAGIC ,SUM(SD_2018)/ sum(AreaHa)   as SD_2018
+# MAGIC ,SUM(SD_2020)/ sum(AreaHa)   as SD_2020
+# MAGIC ---only avg for testing:
+# MAGIC ,AVG(SD_2010)  as SD_2010_avg_for_qc
+# MAGIC --- , AGB_2020_2010_QF
+# MAGIC --- , AGB_2018_2017_QF
+# MAGIC --- , AGB_2019_2018_QF
+# MAGIC --- , AGB_2020_2019_QF
+# MAGIC --- , AGB_2020_2010_SD
+# MAGIC --- , AGB_2018_2017_SD
+# MAGIC --- , AGB_2019_2018_SD
+# MAGIC --- , AGB_2020_2019_SD
+# MAGIC --- , datasource 
+# MAGIC from  ESA_CCI_CUBE
+# MAGIC GROUP BY 
+# MAGIC ISO2
+# MAGIC , LEVEL3_code
+# MAGIC , TAA
+# MAGIC , LULUCF_CODE
+# MAGIC , LULUCF_DESCRIPTION
+# MAGIC , natura2000_protection
+# MAGIC , env_zones
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %scala
+# MAGIC /// build up F_cube: ESA_CCI_CUBE_STATUS (aggregated CUBE for AGB STATUS )
+# MAGIC
+# MAGIC // the following script produce a tabel with the name: [ESA_CCI_CUBE_STATUS_biomass]
+# MAGIC val ESA_CCI_CUBE_STATUS_biomass = spark.sql("""
+# MAGIC  SELECT 
+# MAGIC ISO2
+# MAGIC , LEVEL3_code
+# MAGIC , TAA
+# MAGIC ,ifnull(LULUCF_CODE,'no_LULUCF_CODE')  as LULUCF_CODE
+# MAGIC ,ifnull(LULUCF_DESCRIPTION,'no_LULUCF_CODE')  as LULUCF_DESCRIPTION
+# MAGIC ,ifnull(natura2000_protection,'no_protection')  as natura2000_protection
+# MAGIC ,ifnull(env_zones,'no_env_zones')  as env_zones
+# MAGIC
+# MAGIC , sum(AreaHa) as AreaHa
+# MAGIC --- SUM into Tonnes: 
+# MAGIC , sum(agb_2010) as agb_2010
+# MAGIC , sum(agb_2017) as agb_2017
+# MAGIC , sum(agb_2018) as agb_2018
+# MAGIC , sum(agb_2020) as agb_2020
+# MAGIC --- weighted avg SD : 
+# MAGIC ---,SUM(SD_2010)/ sum(AreaHa)   as SD_2010
+# MAGIC ---,SUM(SD_2017)/ sum(AreaHa)   as SD_2017
+# MAGIC ---,SUM(SD_2018)/ sum(AreaHa)   as SD_2018
+# MAGIC ---,SUM(SD_2020)/ sum(AreaHa)   as SD_2020
+# MAGIC
+# MAGIC
+# MAGIC from  ESA_CCI_CUBE
+# MAGIC GROUP BY 
+# MAGIC ISO2
+# MAGIC , LEVEL3_code
+# MAGIC , TAA
+# MAGIC , LULUCF_CODE
+# MAGIC , LULUCF_DESCRIPTION
+# MAGIC , natura2000_protection
+# MAGIC , env_zones
+# MAGIC
+# MAGIC """)
+# MAGIC
+# MAGIC //ESA_CCI_CUBE_STATUS
+# MAGIC //    .coalesce(1) //be careful with this
+# MAGIC //    .write.format("com.databricks.spark.csv")
+# MAGIC //    .mode(SaveMode.Overwrite)
+# MAGIC //    .option("sep","|")
+# MAGIC //    .option("overwriteSchema", "true")
+# MAGIC //    .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+# MAGIC //    .option("emptyValue", "")
+# MAGIC //    .option("header","true")
+# MAGIC //    .option("treatEmptyValuesAsNulls", "true")  
+# MAGIC //    
+# MAGIC //    .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/AGB_timeseries/ESA_CCI_CUBE_STATUS")
+# MAGIC
+# MAGIC  ESA_CCI_CUBE_STATUS_biomass.createOrReplaceTempView("ESA_CCI_CUBE_STATUS_biomass")
+# MAGIC
+# MAGIC //--------------------------------
+# MAGIC
+# MAGIC // the following script produce a tabel with the name: [ESA_CCI_CUBE_STATUS_SD]
+# MAGIC val ESA_CCI_CUBE_STATUS_SD = spark.sql("""
+# MAGIC  SELECT 
+# MAGIC ISO2
+# MAGIC , LEVEL3_code
+# MAGIC , TAA
+# MAGIC ,ifnull(LULUCF_CODE,'no_LULUCF_CODE')  as LULUCF_CODE
+# MAGIC ,ifnull(LULUCF_DESCRIPTION,'no_LULUCF_CODE')  as LULUCF_DESCRIPTION
+# MAGIC ,ifnull(natura2000_protection,'no_protection')  as natura2000_protection
+# MAGIC ,ifnull(env_zones,'no_env_zones')  as env_zones
+# MAGIC
+# MAGIC , sum(AreaHa) as AreaHa
+# MAGIC --- SUM into Tonnes: 
+# MAGIC  
+# MAGIC ,SUM(SD_2010)/ sum(AreaHa)   as SD_2010
+# MAGIC ,SUM(SD_2017)/ sum(AreaHa)   as SD_2017
+# MAGIC ,SUM(SD_2018)/ sum(AreaHa)   as SD_2018
+# MAGIC ,SUM(SD_2020)/ sum(AreaHa)   as SD_2020
+# MAGIC
+# MAGIC
+# MAGIC from  ESA_CCI_CUBE
+# MAGIC GROUP BY 
+# MAGIC ISO2
+# MAGIC , LEVEL3_code
+# MAGIC , TAA
+# MAGIC , LULUCF_CODE
+# MAGIC , LULUCF_DESCRIPTION
+# MAGIC , natura2000_protection
+# MAGIC , env_zones
+# MAGIC
+# MAGIC """)
+# MAGIC
+# MAGIC //ESA_CCI_CUBE_STATUS_SD
+# MAGIC //    .coalesce(1) //be careful with this
+# MAGIC //    .write.format("com.databricks.spark.csv")
+# MAGIC //    .mode(SaveMode.Overwrite)
+# MAGIC //    .option("sep","|")
+# MAGIC //    .option("overwriteSchema", "true")
+# MAGIC //    .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+# MAGIC //    .option("emptyValue", "")
+# MAGIC //    .option("header","true")
+# MAGIC //    .option("treatEmptyValuesAsNulls", "true")  
+# MAGIC //    
+# MAGIC //    .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/AGB_timeseries/ESA_CCI_CUBE_STATUS_SD")
+# MAGIC
+# MAGIC  ESA_CCI_CUBE_STATUS_SD.createOrReplaceTempView("ESA_CCI_CUBE_STATUS_SD")
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from ESA_CCI_CUBE_STATUS_SD
 
 # COMMAND ----------
 
@@ -409,34 +710,67 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+### FOR transforming and updating ESA_CCI_CUBE_STATUS_biomass table: ########################
+
+
 # Enable Arrow-based columnar data transfers
 spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
 
-# bring sql to pandas>
+# bring sql to pandas> ----------------------------table 1 ESA_CCI_CUBE_STATUS_biomass
 sql_for_panda = spark.sql('''
-SELECT *   from ESA_CCI_CUBE
+SELECT *   from ESA_CCI_CUBE_STATUS_biomass
 ''')
 
 df = sql_for_panda.select("*").toPandas()
 
 #for EVA https://pandas.pydata.org/pandas-docs/stable/user_guide/10min.html
 
-
-
-#df_transformed =df.melt(id_vars=[
-#'GridNum10km',
-#'AreaHa',
-#'LEVEL3_code',
-#'ISO2',
-#'TAA',
-#'LULUCF_CODE' ], var_name="year", value_name="xxx")
+df_transformed =df.melt(id_vars=[
+'AreaHa',
+'LEVEL3_code',
+'ISO2',
+'TAA',
+'LULUCF_CODE',
+'LULUCF_DESCRIPTION',
+'natura2000_protection',
+'env_zones'
+ ], var_name="year", value_name="agb_tonnes")
 
 ## updapte year:
-#df_transformed['year_link'] = df_transformed['year'].str[-4:]
+df_transformed['year_link'] = df_transformed['year'].str[-4:]
 #
 ## dataframe to table:
-#df_transformed_gdmp_new1 = spark.createDataFrame(df_transformed)
-#df_transformed_gdmp_new1.createOrReplaceTempView("df_transformed_fire")
+df_transformed_c1 = spark.createDataFrame(df_transformed)
+df_transformed_c1.createOrReplaceTempView("df_transformed_agb_biomass_tonnes")
+
+
+
+# bring sql to pandas> ----------------------------table 2 ESA_CCI_CUBE_STATUS_SD
+sql_for_panda_c2 = spark.sql('''
+SELECT *   from ESA_CCI_CUBE_STATUS_SD
+''')
+
+df_c2 = sql_for_panda_c2.select("*").toPandas()
+
+#for EVA https://pandas.pydata.org/pandas-docs/stable/user_guide/10min.html
+
+df_transformed_c2 =df_c2.melt(id_vars=[
+'AreaHa',
+'LEVEL3_code',
+'ISO2',
+'TAA',
+'LULUCF_CODE',
+'LULUCF_DESCRIPTION',
+'natura2000_protection',
+'env_zones'
+ ], var_name="year", value_name="agb_SD")
+
+## updapte year:
+df_transformed_c2['year_link'] = df_transformed_c2['year'].str[-4:]
+#
+## dataframe to table:
+df_transformed_c2 = spark.createDataFrame(df_transformed_c2)
+df_transformed_c2.createOrReplaceTempView("df_transformed_agb_SD")
 
 
 
@@ -449,7 +783,7 @@ df = sql_for_panda.select("*").toPandas()
 
 # COMMAND ----------
 
-df
+print (df_c2)
 
 # COMMAND ----------
 
@@ -481,17 +815,89 @@ plt.savefig("Plotting_Correlation_Scatterplot_With_Regression_Fit.jpg")
 
 # COMMAND ----------
 
+# MAGIC %md ### 4.1) Combine single timeseries bevor exporting the data to CWS:
+# MAGIC
+# MAGIC The following box used the anaylitcal & year to set up a single time series wiht different values (AGB-biomass, AGB-SD,...)
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SHOW COLUMNS IN df_transformed_agb_SD
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT
+# MAGIC
+# MAGIC
+# MAGIC df_transformed_agb_biomass_tonnes.LEVEL3_code
+# MAGIC ,df_transformed_agb_biomass_tonnes.ISO2
+# MAGIC ,df_transformed_agb_biomass_tonnes.TAA
+# MAGIC ,df_transformed_agb_biomass_tonnes.LULUCF_CODE
+# MAGIC ,df_transformed_agb_biomass_tonnes.LULUCF_DESCRIPTION
+# MAGIC ,df_transformed_agb_biomass_tonnes.natura2000_protection
+# MAGIC ,df_transformed_agb_biomass_tonnes.env_zones
+# MAGIC --df_transformed_agb_biomass_tonnes.year
+# MAGIC ,df_transformed_agb_biomass_tonnes.agb_tonnes
+# MAGIC ,df_transformed_agb_SD.agb_SD
+# MAGIC ,df_transformed_agb_biomass_tonnes.year_link
+# MAGIC ,df_transformed_agb_biomass_tonnes.AreaHa
+# MAGIC ,'calc based on EAS CCI data version 4 - conatact: Manuel'
+# MAGIC
+# MAGIC  from df_transformed_agb_biomass_tonnes  ---df_transformed_agb_SD
+# MAGIC
+# MAGIC LEFT JOIN df_transformed_agb_SD on 
+# MAGIC
+# MAGIC   df_transformed_agb_SD.LEVEL3_code = df_transformed_agb_biomass_tonnes.LEVEL3_code AND
+# MAGIC   df_transformed_agb_SD.ISO2 = df_transformed_agb_biomass_tonnes.ISO2 AND
+# MAGIC   df_transformed_agb_SD.TAA = df_transformed_agb_biomass_tonnes.TAA AND
+# MAGIC   df_transformed_agb_SD.LULUCF_CODE = df_transformed_agb_biomass_tonnes.LULUCF_CODE AND
+# MAGIC   df_transformed_agb_SD.LULUCF_DESCRIPTION = df_transformed_agb_biomass_tonnes.LULUCF_DESCRIPTION AND
+# MAGIC   df_transformed_agb_SD.natura2000_protection = df_transformed_agb_biomass_tonnes.natura2000_protection AND
+# MAGIC   df_transformed_agb_SD.env_zones = df_transformed_agb_biomass_tonnes.env_zones AND
+# MAGIC   df_transformed_agb_SD.year_link = df_transformed_agb_biomass_tonnes.year_link 
+
+# COMMAND ----------
+
 # MAGIC %scala
 # MAGIC
 # MAGIC
-# MAGIC /// exporting AGB stock union
-# MAGIC val tableDF_export_db_agb = spark.sql("""
+# MAGIC /// exporting AGB status tonnes and SD to CWS:
+# MAGIC val tableDF_export_db_agb_status = spark.sql("""
 # MAGIC
 # MAGIC ---- COPY THE OUTPUT TABLE sql query here!!!!!!!!!!!!!
 # MAGIC
+# MAGIC SELECT
+# MAGIC
+# MAGIC df_transformed_agb_biomass_tonnes.LEVEL3_code
+# MAGIC ,df_transformed_agb_biomass_tonnes.ISO2
+# MAGIC ,df_transformed_agb_biomass_tonnes.TAA
+# MAGIC ,df_transformed_agb_biomass_tonnes.LULUCF_CODE
+# MAGIC ,df_transformed_agb_biomass_tonnes.LULUCF_DESCRIPTION
+# MAGIC ,df_transformed_agb_biomass_tonnes.natura2000_protection
+# MAGIC ,df_transformed_agb_biomass_tonnes.env_zones
+# MAGIC --df_transformed_agb_biomass_tonnes.year
+# MAGIC ,df_transformed_agb_biomass_tonnes.agb_tonnes
+# MAGIC ,df_transformed_agb_SD.agb_SD
+# MAGIC ,df_transformed_agb_biomass_tonnes.year_link
+# MAGIC ,df_transformed_agb_biomass_tonnes.AreaHa
+# MAGIC ,'calc based on EAS CCI data version 4 - conatact: Manuel'
+# MAGIC
+# MAGIC  from df_transformed_agb_biomass_tonnes  ---df_transformed_agb_SD
+# MAGIC
+# MAGIC LEFT JOIN df_transformed_agb_SD on 
+# MAGIC
+# MAGIC   df_transformed_agb_SD.LEVEL3_code = df_transformed_agb_biomass_tonnes.LEVEL3_code AND
+# MAGIC   df_transformed_agb_SD.ISO2 = df_transformed_agb_biomass_tonnes.ISO2 AND
+# MAGIC   df_transformed_agb_SD.TAA = df_transformed_agb_biomass_tonnes.TAA AND
+# MAGIC   df_transformed_agb_SD.LULUCF_CODE = df_transformed_agb_biomass_tonnes.LULUCF_CODE AND
+# MAGIC   df_transformed_agb_SD.LULUCF_DESCRIPTION = df_transformed_agb_biomass_tonnes.LULUCF_DESCRIPTION AND
+# MAGIC   df_transformed_agb_SD.natura2000_protection = df_transformed_agb_biomass_tonnes.natura2000_protection AND
+# MAGIC   df_transformed_agb_SD.env_zones = df_transformed_agb_biomass_tonnes.env_zones AND
+# MAGIC   df_transformed_agb_SD.year_link = df_transformed_agb_biomass_tonnes.year_link 
 # MAGIC
 # MAGIC """)
-# MAGIC tableDF_export_db_agb
+# MAGIC tableDF_export_db_agb_status
 # MAGIC     .coalesce(1) //be careful with this
 # MAGIC     .write.format("com.databricks.spark.csv")
 # MAGIC     .mode(SaveMode.Overwrite)
@@ -502,9 +908,9 @@ plt.savefig("Plotting_Correlation_Scatterplot_With_Regression_Fit.jpg")
 # MAGIC     .option("header","true")
 # MAGIC     .option("treatEmptyValuesAsNulls", "true")  
 # MAGIC     
-# MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/AGB_timeseries")
+# MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/AGB_timeseries/agb_status")
 # MAGIC
-# MAGIC     tableDF_export_db_agb.createOrReplaceTempView("AGB_STOCK_2018")
+# MAGIC     tableDF_export_db_agb_status.createOrReplaceTempView("tableDF_export_db_agb_status")
 # MAGIC
 # MAGIC
 # MAGIC
@@ -515,7 +921,7 @@ plt.savefig("Plotting_Correlation_Scatterplot_With_Regression_Fit.jpg")
 
 
 	### Reading URL of resulting table: (for downloading to EEA greenmonkey)
-folder ="dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/AGB_timeseries"
+folder ="dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/AGB_timeseries/agb_status"
 folder_output =folder[29:]
 for file in dbutils.fs.ls(folder):
     if file.name[-2:] =="gz":
