@@ -562,7 +562,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC val ref_cube_read  = spark.read.format("csv")
 # MAGIC   .options(Map("delimiter"->"|"))
 # MAGIC   .option("header", "true")  /// first row = header
-# MAGIC   .load("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/ref_cube/part-00000-tid-184124293592606396-19e7e537-6ba5-485b-b286-750f5259f3fa-9672-1-c000.csv.gz") 
+# MAGIC   .load("https://cwsblobstorage01.blob.core.windows.net/cwsblob01/ExportTable/Carbon_mapping/ref_cube/part-00000-tid-2913451643038522271-31183585-a954-4730-8b69-98b75712bc1a-506-1-c000.csv.gz") 
 # MAGIC ref_cube_read.createOrReplaceTempView("ref_cube")
 # MAGIC
 
@@ -1026,6 +1026,7 @@ for file in dbutils.fs.ls(folder):
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC ----testing
 # MAGIC select
 # MAGIC admin_category
 # MAGIC   ,LULUCF_CODE
@@ -1153,6 +1154,7 @@ for file in dbutils.fs.ls(folder):
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC --testing 
 # MAGIC select
 # MAGIC  admin_category
 # MAGIC ,LULUCF_CODE

@@ -1239,6 +1239,20 @@
 
 # COMMAND ----------
 
+# MAGIC
+# MAGIC %sql
+# MAGIC --- QC...of the "mother table:"
+# MAGIC
+# MAGIC
+# MAGIC SELECT
+# MAGIC ISO2,
+# MAGIC env_zones,
+# MAGIC sum(AreaHa) as Areaha
+# MAGIC FROM fireco2_cube
+# MAGIC GROUP BY env_zones, ISO2
+
+# COMMAND ----------
+
 # MAGIC %sql
 # MAGIC --- QC...of the "mother table:"
 # MAGIC
@@ -1336,7 +1350,3 @@
 # MAGIC select count(GridNum10km)
 # MAGIC from
 # MAGIC fireco2_cube
-
-# COMMAND ----------
-
-52404*20
