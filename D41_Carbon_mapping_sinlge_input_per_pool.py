@@ -482,10 +482,8 @@ for file in dbutils.fs.ls(folder):
 # MAGIC (Layer only valid for Forest! Nevertheless, the data is released here for all other lulucf classes... the customer is king.
 # MAGIC )
 # MAGIC
-# MAGIC images/esa_cci_agb.PNG
 # MAGIC
-# MAGIC
-# MAGIC ![](https://adb-664128750067591.11.azuredatabricks.net/?o=664128750067591#files/2057301627581187/Workspace/Repos/ETC DI/ETC-DI-databricks/images/esa_cci_agb.PNG?raw=true)
+# MAGIC ![](https://github.com/eea/ETC-DI-databricks/blob/main/images/esa_cci_agb.PNG?raw=true)
 # MAGIC
 
 # COMMAND ----------
@@ -538,7 +536,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC LEFT JOIN env_zones    on nuts3_2021.GridNum = env_zones.GridNum
 # MAGIC LEFT JOIN Natura2000_100m_NET on nuts3_2021.GridNum = Natura2000_100m_NET.GridNum
 # MAGIC
-# MAGIC where  nuts3_2021.LEVEL3_code is not null  -
+# MAGIC where  nuts3_2021.LEVEL3_code is not null  
 # MAGIC
 # MAGIC group by 
 # MAGIC
@@ -565,7 +563,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC
 # MAGIC """)
 # MAGIC
-# MAGIC tableDF_export_db_nuts3_agb1_FL_SL
+# MAGIC tableDF_export_db_nuts3_agb1_all
 # MAGIC     .coalesce(1) //be careful with this
 # MAGIC     .write.format("com.databricks.spark.csv")
 # MAGIC     .mode(SaveMode.Overwrite)
@@ -579,7 +577,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Carbon_mapping/AGB/AGB_STOCK1_ESA_CCI2018_ALL")
 # MAGIC
 # MAGIC
-# MAGIC     tableDF_export_db_nuts3_agb1_all.createOrReplaceTempView("AGB_STOCK1_ESA_CCI2018_for_ALL")
+# MAGIC     ///---tableDF_export_db_nuts3_agb1_all.createOrReplaceTempView("AGB_STOCK1_ESA_CCI2018_for_ALL")
 
 # COMMAND ----------
 
@@ -601,7 +599,10 @@ for file in dbutils.fs.ls(folder):
 # COMMAND ----------
 
 # MAGIC %md ### (2.5) BGB STOCK
-# MAGIC ![](https://github.com/eea/ETC-DI-databricks/blob/main/images/bgb.JPG?raw=true?raw=true?raw=true)
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
 
 # COMMAND ----------
 
@@ -686,7 +687,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC
 # MAGIC
 # MAGIC """)
-# MAGIC tableDF_export_db_nuts3_bgb1
+# MAGIC tableDF_export_db_nuts3_bgb1_all
 # MAGIC     .coalesce(1) //be careful with this
 # MAGIC     .write.format("com.databricks.spark.csv")
 # MAGIC     .mode(SaveMode.Overwrite)

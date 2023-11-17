@@ -357,6 +357,10 @@
 # MAGIC val GDMP_1km_trend_analy  = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_GDMP_1km_trend_analy_1051_2023928_1km/")
 # MAGIC GDMP_1km_trend_analy.createOrReplaceTempView("GDMP_1km_trend_analy")
 # MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
 # MAGIC //##########################################################################################################################################
 # MAGIC ////26  LTA  1 km 
 # MAGIC //##########################################################################################################################################
@@ -390,7 +394,7 @@
 # MAGIC /// 1 SMA_statistics - Annual SMA pvalue
 # MAGIC /// 1 SMA_statistics - Annual SMA relative change 
 # MAGIC /// 
-# MAGIC /// 2 LTA_SMA_background - SMA LTA (2001-2020) 
+# MAGIC /// 2 LTA_SMA_background - SMA LTA (2001-2020)    xx
 # MAGIC /// 
 # MAGIC /// 3 a_drought_imp_inten - annual drought impact intensity 
 # MAGIC /// 
@@ -404,9 +408,9 @@
 # MAGIC /// 5 GDMP_1km_trend_analy - GDMP slope 
 # MAGIC /// 5 GDMP_1km_trend_analy - GDMP relative change
 # MAGIC /// 
-# MAGIC /// 6 LTA_analysis - LTA drought pressure intensity
-# MAGIC /// 6 LTA_analysis - LTA drought pressure occurrence 
-# MAGIC /// 6 LTA_analysis - LTA drought impact intensity
+# MAGIC /// 6 LTA_analysis - LTA drought pressure intensity xyx
+# MAGIC /// 6 LTA_analysis - LTA drought pressure occurrence xx
+# MAGIC /// 6 LTA_analysis - LTA drought impact intensity xx
 # MAGIC /// 
 # MAGIC /// 0 gdmp_1km_pv - GDMP physical values
 # MAGIC /// SMA growing seasion gs - timerseries 1km 
@@ -417,7 +421,13 @@
 
 # COMMAND ----------
 
-
+# MAGIC %sql
+# MAGIC show columns from gdmp_1km_statistic_c
+# MAGIC --LTA_analysis
+# MAGIC GDMP_1km_pvalue
+# MAGIC GDMP_1km_slope
+# MAGIC GDMP_1km_mean
+# MAGIC GDMP_1km_std
 
 # COMMAND ----------
 
@@ -562,7 +572,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC val ref_cube_read  = spark.read.format("csv")
 # MAGIC   .options(Map("delimiter"->"|"))
 # MAGIC   .option("header", "true")  /// first row = header
-# MAGIC   .load("https://cwsblobstorage01.blob.core.windows.net/cwsblob01/ExportTable/Carbon_mapping/ref_cube/part-00000-tid-2913451643038522271-31183585-a954-4730-8b69-98b75712bc1a-506-1-c000.csv.gz") 
+# MAGIC   .load("https://cwsblobstorage01.blob.core.windows.net/cwsblob01/ExportTable/Carbon_mapping/ref_cube/part-00000-tid-8230746913003961503-295bfb30-826f-4f5a-b15c-4be65b4c518a-502-1-c000.csv.gz") 
 # MAGIC ref_cube_read.createOrReplaceTempView("ref_cube")
 # MAGIC
 
@@ -1001,7 +1011,7 @@ for file in dbutils.fs.ls(folder):
 # MAGIC     
 # MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/carbon_mapping/drought_sma_gdmp/cube_1_c")
 # MAGIC
-# MAGIC     //cube_1_c.createOrReplaceTempView("cube_1_c")  
+# MAGIC     cube_1_c.createOrReplaceTempView("cube_1_c")  
 # MAGIC
 # MAGIC
 # MAGIC
@@ -1403,6 +1413,36 @@ for file in dbutils.fs.ls(folder):
 # MAGIC
 # MAGIC
 # MAGIC
+# MAGIC ,gdmp_1km_statistic_c.GDMP_1km_mean as GDMP_1km_mean_2001_2020
+# MAGIC
+# MAGIC ,IF(SMA_gs_1km_annual_2000<-1 AND GDMP_1km_anom_2000<0, GDMP_2000_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2000 
+# MAGIC ,IF(SMA_gs_1km_annual_2001<-1 AND GDMP_1km_anom_2001<0, GDMP_2001_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2001  
+# MAGIC ,IF(SMA_gs_1km_annual_2002<-1 AND GDMP_1km_anom_2002<0, GDMP_2002_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2002 
+# MAGIC ,IF(SMA_gs_1km_annual_2003<-1 AND GDMP_1km_anom_2003<0, GDMP_2003_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2003   
+# MAGIC ,IF(SMA_gs_1km_annual_2004<-1 AND GDMP_1km_anom_2004<0, GDMP_2004_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2004 
+# MAGIC ,IF(SMA_gs_1km_annual_2005<-1 AND GDMP_1km_anom_2005<0, GDMP_2005_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2005   
+# MAGIC ,IF(SMA_gs_1km_annual_2006<-1 AND GDMP_1km_anom_2006<0, GDMP_2006_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2006 
+# MAGIC ,IF(SMA_gs_1km_annual_2007<-1 AND GDMP_1km_anom_2007<0, GDMP_2007_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2007   
+# MAGIC ,IF(SMA_gs_1km_annual_2008<-1 AND GDMP_1km_anom_2008<0, GDMP_2008_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2008 
+# MAGIC ,IF(SMA_gs_1km_annual_2009<-1 AND GDMP_1km_anom_2009<0, GDMP_2009_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2009   
+# MAGIC ,IF(SMA_gs_1km_annual_2010<-1 AND GDMP_1km_anom_2010<0, GDMP_2010_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2010 
+# MAGIC ,IF(SMA_gs_1km_annual_2011<-1 AND GDMP_1km_anom_2011<0, GDMP_2011_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2011   
+# MAGIC ,IF(SMA_gs_1km_annual_2012<-1 AND GDMP_1km_anom_2012<0, GDMP_2012_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2012 
+# MAGIC ,IF(SMA_gs_1km_annual_2013<-1 AND GDMP_1km_anom_2013<0, GDMP_2013_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2013   
+# MAGIC ,IF(SMA_gs_1km_annual_2014<-1 AND GDMP_1km_anom_2014<0, GDMP_2014_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2014 
+# MAGIC ,IF(SMA_gs_1km_annual_2015<-1 AND GDMP_1km_anom_2015<0, GDMP_2015_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2015   
+# MAGIC ,IF(SMA_gs_1km_annual_2016<-1 AND GDMP_1km_anom_2016<0, GDMP_2016_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2016 
+# MAGIC ,IF(SMA_gs_1km_annual_2017<-1 AND GDMP_1km_anom_2017<0, GDMP_2017_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2017   
+# MAGIC ,IF(SMA_gs_1km_annual_2018<-1 AND GDMP_1km_anom_2018<0, GDMP_2018_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2018 
+# MAGIC ,IF(SMA_gs_1km_annual_2019<-1 AND GDMP_1km_anom_2019<0, GDMP_2019_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2019   
+# MAGIC ,IF(SMA_gs_1km_annual_2020<-1 AND GDMP_1km_anom_2020<0, GDMP_2020_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2020 
+# MAGIC ,IF(SMA_gs_1km_annual_2021<-1 AND GDMP_1km_anom_2021<0, GDMP_2021_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2021   
+# MAGIC ,IF(SMA_gs_1km_annual_2022<-1 AND GDMP_1km_anom_2022<0, GDMP_2022_pv - GDMP_1km_mean ,0 ) as annual_drought_induced_productivity_2022 
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
 # MAGIC ----annual productivity condition = SUM of GDMP values DIM: gdmp_1km_pv
 # MAGIC ----annual drought impact area = nr of gridcells expressed in km2 where SMA<-1 and GDMPaomalies <0 (GDMPa = GDMP anomalies)
 # MAGIC ----annual drought impact intensity, relative = AVR of GDMPGDMPaomalies where SMA < -1 AND GDMPGDMPaomalies <0
@@ -1538,6 +1578,37 @@ for file in dbutils.fs.ls(folder):
 # MAGIC ----annual drought impact area = nr of gridcells expressed in km2 where SMA<-1 and GDMPaomalies <0 (GDMPa = GDMP anomalies)
 # MAGIC ----annual drought impact intensity, relative = AVR of GDMPGDMPaomalies where SMA < -1 AND GDMPGDMPaomalies <0
 # MAGIC ----annual drought impact intensity, absolute = SUM of GDMP where SMA <-1 AND GDMPGDMPaomalies <0
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC ,gdmp_1km_statistic_c.GDMP_1km_mean as GDMP_1km_mean_2001_2020
+# MAGIC
+# MAGIC ,IF(SMA_gs_1km_annual_2000<-1 AND GDMP_1km_anom_2000<0, GDMP_2000_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2000 
+# MAGIC ,IF(SMA_gs_1km_annual_2001<-1 AND GDMP_1km_anom_2001<0, GDMP_2001_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2001  
+# MAGIC ,IF(SMA_gs_1km_annual_2002<-1 AND GDMP_1km_anom_2002<0, GDMP_2002_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2002 
+# MAGIC ,IF(SMA_gs_1km_annual_2003<-1 AND GDMP_1km_anom_2003<0, GDMP_2003_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2003   
+# MAGIC ,IF(SMA_gs_1km_annual_2004<-1 AND GDMP_1km_anom_2004<0, GDMP_2004_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2004 
+# MAGIC ,IF(SMA_gs_1km_annual_2005<-1 AND GDMP_1km_anom_2005<0, GDMP_2005_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2005   
+# MAGIC ,IF(SMA_gs_1km_annual_2006<-1 AND GDMP_1km_anom_2006<0, GDMP_2006_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2006 
+# MAGIC ,IF(SMA_gs_1km_annual_2007<-1 AND GDMP_1km_anom_2007<0, GDMP_2007_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2007   
+# MAGIC ,IF(SMA_gs_1km_annual_2008<-1 AND GDMP_1km_anom_2008<0, GDMP_2008_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2008 
+# MAGIC ,IF(SMA_gs_1km_annual_2009<-1 AND GDMP_1km_anom_2009<0, GDMP_2009_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2009   
+# MAGIC ,IF(SMA_gs_1km_annual_2010<-1 AND GDMP_1km_anom_2010<0, GDMP_2010_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2010 
+# MAGIC ,IF(SMA_gs_1km_annual_2011<-1 AND GDMP_1km_anom_2011<0, GDMP_2011_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2011   
+# MAGIC ,IF(SMA_gs_1km_annual_2012<-1 AND GDMP_1km_anom_2012<0, GDMP_2012_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2012 
+# MAGIC ,IF(SMA_gs_1km_annual_2013<-1 AND GDMP_1km_anom_2013<0, GDMP_2013_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2013   
+# MAGIC ,IF(SMA_gs_1km_annual_2014<-1 AND GDMP_1km_anom_2014<0, GDMP_2014_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2014 
+# MAGIC ,IF(SMA_gs_1km_annual_2015<-1 AND GDMP_1km_anom_2015<0, GDMP_2015_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2015   
+# MAGIC ,IF(SMA_gs_1km_annual_2016<-1 AND GDMP_1km_anom_2016<0, GDMP_2016_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2016 
+# MAGIC ,IF(SMA_gs_1km_annual_2017<-1 AND GDMP_1km_anom_2017<0, GDMP_2017_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2017   
+# MAGIC ,IF(SMA_gs_1km_annual_2018<-1 AND GDMP_1km_anom_2018<0, GDMP_2018_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2018 
+# MAGIC ,IF(SMA_gs_1km_annual_2019<-1 AND GDMP_1km_anom_2019<0, GDMP_2019_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2019   
+# MAGIC ,IF(SMA_gs_1km_annual_2020<-1 AND GDMP_1km_anom_2020<0, GDMP_2020_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2020 
+# MAGIC ,IF(SMA_gs_1km_annual_2021<-1 AND GDMP_1km_anom_2021<0, GDMP_2021_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2021   
+# MAGIC ,IF(SMA_gs_1km_annual_2022<-1 AND GDMP_1km_anom_2022<0, GDMP_2022_pv - GDMP_1km_mean ,0 ) as annual_drought_productivity_deficit_2022 
+# MAGIC
+# MAGIC
+# MAGIC
 # MAGIC from
 # MAGIC   ref_cube
 # MAGIC LEFT JOIN gdmp_1km_pv on gdmp_1km_pv.gridnum   =ref_cube.GridNum1km  ---1km JOIN!!!
@@ -1660,6 +1731,37 @@ for file in dbutils.fs.ls(folder):
 # MAGIC ,SUM(annual_drought_impact_intensity_absolute_2021) as annual_drought_impact_intensity_absolute_2021
 # MAGIC ,SUM(annual_drought_impact_intensity_absolute_2022) as annual_drought_impact_intensity_absolute_2022
 # MAGIC
+# MAGIC
+# MAGIC --SUM LTA-background gdmp:
+# MAGIC
+# MAGIC ,SUM(GDMP_1km_mean_2001_2020) as GDMP_1km_mean_2001_2020
+# MAGIC
+# MAGIC
+# MAGIC --SUM: nnual_drought_induced_productivity:
+# MAGIC
+# MAGIC ,SUM(annual_drought_induced_productivity_2000) as annual_drought_induced_productivity_2000 
+# MAGIC ,SUM(annual_drought_induced_productivity_2001) as annual_drought_induced_productivity_2001 
+# MAGIC ,SUM(annual_drought_induced_productivity_2002) as annual_drought_induced_productivity_2002 
+# MAGIC ,SUM(annual_drought_induced_productivity_2003) as annual_drought_induced_productivity_2003 
+# MAGIC ,SUM(annual_drought_induced_productivity_2004) as annual_drought_induced_productivity_2004 
+# MAGIC ,SUM(annual_drought_induced_productivity_2005) as annual_drought_induced_productivity_2005 
+# MAGIC ,SUM(annual_drought_induced_productivity_2006) as annual_drought_induced_productivity_2006 
+# MAGIC ,SUM(annual_drought_induced_productivity_2007) as annual_drought_induced_productivity_2007 
+# MAGIC ,SUM(annual_drought_induced_productivity_2008) as annual_drought_induced_productivity_2008 
+# MAGIC ,SUM(annual_drought_induced_productivity_2009) as annual_drought_induced_productivity_2009 
+# MAGIC ,SUM(annual_drought_induced_productivity_2010) as annual_drought_induced_productivity_2010 
+# MAGIC ,SUM(annual_drought_induced_productivity_2011) as annual_drought_induced_productivity_2011 
+# MAGIC ,SUM(annual_drought_induced_productivity_2012) as annual_drought_induced_productivity_2012 
+# MAGIC ,SUM(annual_drought_induced_productivity_2013) as annual_drought_induced_productivity_2013 
+# MAGIC ,SUM(annual_drought_induced_productivity_2014) as annual_drought_induced_productivity_2014 
+# MAGIC ,SUM(annual_drought_induced_productivity_2015) as annual_drought_induced_productivity_2015 
+# MAGIC ,SUM(annual_drought_induced_productivity_2016) as annual_drought_induced_productivity_2016 
+# MAGIC ,SUM(annual_drought_induced_productivity_2017) as annual_drought_induced_productivity_2017 
+# MAGIC ,SUM(annual_drought_induced_productivity_2018) as annual_drought_induced_productivity_2018 
+# MAGIC ,SUM(annual_drought_induced_productivity_2019) as annual_drought_induced_productivity_2019 
+# MAGIC ,SUM(annual_drought_induced_productivity_2020) as annual_drought_induced_productivity_2020 
+# MAGIC ,SUM(annual_drought_induced_productivity_2021) as annual_drought_induced_productivity_2021 
+# MAGIC ,SUM(annual_drought_induced_productivity_2022) as annual_drought_induced_productivity_2022 
 # MAGIC from cube_2_f
 # MAGIC
 # MAGIC GROUP BY
@@ -1689,6 +1791,9 @@ for file in dbutils.fs.ls(folder):
 # MAGIC     
 # MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/carbon_mapping/drought_sma_gdmp/cube_2_c")
 # MAGIC
+# MAGIC
+# MAGIC     cube_2_c.createOrReplaceTempView("cube_2_c")  
+# MAGIC
 # MAGIC   
 # MAGIC
 
@@ -1717,6 +1822,19 @@ for file in dbutils.fs.ls(folder):
 # MAGIC - GDMP p value 
 # MAGIC - GDMP slope 
 # MAGIC - GDMP rel change 
+# MAGIC - GDMP_1km_mean
+# MAGIC - GDMP_1km_std
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC show columns from gdmp_1km_statistic_c
+# MAGIC --LTA_analysis
+# MAGIC
+# MAGIC
 
 # COMMAND ----------
 
@@ -1738,10 +1856,17 @@ for file in dbutils.fs.ls(folder):
 # MAGIC ,GDMP_1km_00_22_slope
 # MAGIC ,GDMP_1km_00_22_trend
 # MAGIC
+# MAGIC
+# MAGIC ,GDMP_1km_pvalue
+# MAGIC ,GDMP_1km_slope
+# MAGIC ,GDMP_1km_mean
+# MAGIC ,GDMP_1km_std
+# MAGIC
 # MAGIC from
 # MAGIC   ref_cube
 # MAGIC LEFT JOIN SMA_statistics        on SMA_statistics.gridnum                     =ref_cube.GridNum1km  ---1km JOIN!!!
 # MAGIC LEFT JOIN GDMP_1km_trend_analy  on GDMP_1km_trend_analy.gridnum              =ref_cube.GridNum1km  ---1km JOIN!!!
+# MAGIC LEFT JOIN gdmp_1km_statistic_c  on gdmp_1km_statistic_c.gridnum              =ref_cube.GridNum1km  ---1km JOIN!!!
 # MAGIC
 # MAGIC
 # MAGIC
@@ -1764,6 +1889,36 @@ for file in dbutils.fs.ls(folder):
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC SELECT  
+# MAGIC   ref_cube.admin_category
+# MAGIC   ,ref_cube.GridNum10km
+# MAGIC   ,ref_cube.GridNum1km
+# MAGIC   ,ref_cube.LULUCF_CODE
+# MAGIC   ,ref_cube.env_zones
+# MAGIC   ,ref_cube.natura2000_protection
+# MAGIC   ,ref_cube.AreaHa 
+# MAGIC   ,MK_trend_SMA_annual
+# MAGIC   ,p_value_SMA_annual
+# MAGIC   ,relative_change_SMA_annual
+# MAGIC   ,GDMP_1km_00_22_pvalue
+# MAGIC   ,IF(GDMP_1km_00_22_relative_change='Infinity', NULL, GDMP_1km_00_22_relative_change) as GDMP_1km_00_22_relative_change
+# MAGIC   ,GDMP_1km_00_22_slope
+# MAGIC   ,GDMP_1km_00_22_trend
+# MAGIC
+# MAGIC   ,GDMP_1km_pvalue   --- new
+# MAGIC   ,GDMP_1km_slope  --- new
+# MAGIC   ,GDMP_1km_mean  --- new
+# MAGIC   ,GDMP_1km_std  --- new
+# MAGIC
+# MAGIC   from
+# MAGIC     ref_cube
+# MAGIC   LEFT JOIN SMA_statistics        on SMA_statistics.gridnum                     =ref_cube.GridNum1km  ---1km JOIN!!!
+# MAGIC   LEFT JOIN GDMP_1km_trend_analy  on GDMP_1km_trend_analy.gridnum              =ref_cube.GridNum1km  ---1km JOIN!!!
+# MAGIC   LEFT JOIN gdmp_1km_statistic_c  on gdmp_1km_statistic_c.gridnum              =ref_cube.GridNum1km  ---1km JOIN!!!
+
+# COMMAND ----------
+
 # MAGIC %scala
 # MAGIC /// Set up F-CUBE (3)
 # MAGIC val cube_3_f = spark.sql("""              
@@ -1782,10 +1937,17 @@ for file in dbutils.fs.ls(folder):
 # MAGIC   ,IF(GDMP_1km_00_22_relative_change='Infinity', NULL, GDMP_1km_00_22_relative_change) as GDMP_1km_00_22_relative_change
 # MAGIC   ,GDMP_1km_00_22_slope
 # MAGIC   ,GDMP_1km_00_22_trend
+# MAGIC
+# MAGIC   ,GDMP_1km_pvalue   --- new
+# MAGIC   ,GDMP_1km_slope  --- new
+# MAGIC   ,GDMP_1km_mean  --- new
+# MAGIC   ,GDMP_1km_std  --- new
+# MAGIC
 # MAGIC   from
 # MAGIC     ref_cube
 # MAGIC   LEFT JOIN SMA_statistics        on SMA_statistics.gridnum                     =ref_cube.GridNum1km  ---1km JOIN!!!
 # MAGIC   LEFT JOIN GDMP_1km_trend_analy  on GDMP_1km_trend_analy.gridnum              =ref_cube.GridNum1km  ---1km JOIN!!!
+# MAGIC   LEFT JOIN gdmp_1km_statistic_c  on gdmp_1km_statistic_c.gridnum              =ref_cube.GridNum1km  ---1km JOIN!!!
 # MAGIC                                                       """)        
 # MAGIC cube_3_f.createOrReplaceTempView("cube_3_f")  
 # MAGIC
@@ -1808,6 +1970,11 @@ for file in dbutils.fs.ls(folder):
 # MAGIC       ,SUM(p_value_SMA_annual* AreaHa )/ SUM(AreaHa)                as p_value_SMA_annual
 # MAGIC       ,SUM(relative_change_SMA_annual* AreaHa )/ SUM(AreaHa)        as relative_change_SMA_annual
 # MAGIC       
+# MAGIC     ,SUM(GDMP_1km_pvalue       * AreaHa )/ SUM(AreaHa)               as  GDMP_1km_pvalue
+# MAGIC     ,SUM(GDMP_1km_slope    * AreaHa )/ SUM(AreaHa)               as GDMP_1km_slope
+# MAGIC     ,SUM(GDMP_1km_mean    * AreaHa )/ SUM(AreaHa)               as GDMP_1km_mean
+# MAGIC     ,SUM(GDMP_1km_std    * AreaHa )/ SUM(AreaHa)               as GDMP_1km_std
+# MAGIC
 # MAGIC       from cube_3_f
 # MAGIC       group by 
 # MAGIC       admin_category
@@ -1829,6 +1996,9 @@ for file in dbutils.fs.ls(folder):
 # MAGIC     .option("treatEmptyValuesAsNulls", "true")  
 # MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/carbon_mapping/drought_sma_gdmp/cube_3_c")
 # MAGIC
+# MAGIC
+# MAGIC     cube_3_c.createOrReplaceTempView("cube_3_c")  
+# MAGIC
 # MAGIC   
 # MAGIC
 
@@ -1849,7 +2019,137 @@ for file in dbutils.fs.ls(folder):
 
 # COMMAND ----------
 
+# MAGIC %md ### 2.4) Construction of CUBE XX --for testing
+# MAGIC
+# MAGIC Annual drought induced productivity deficit:
+# MAGIC
+# MAGIC Annual drought induced productivity deficit = SUM of GDMP-LTA where SMA <  -1 AND GDMPa <0 . Ist es nicht einfacher dies im Tableau ausrechnen? LTA haben wir als layer, und dann nr 5) ist einfach nr 4) - LTA. Oder? Wenn ja dann 5) sollte GDMP LTA sein. 
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC  GDMP - AVR GDMP(background) where SMA < -1 and GDMPa < 0 
+# MAGIC -----------------------------------
+# MAGIC GDMP= abs GDMP values [OK - found in CUBE2--- for all years:  GDMP_2000_pv]
+# MAGIC
+# MAGIC GDMPa = GDMP anomalies (relative to the 2001-2020 LTA called background)  [ gdmp_1km_statistic_c - GDMP_1km_mean]
+# MAGIC
+# MAGIC AVR GDMP (background) = 2001-2020 AVR GDMP values [cube3:GDMP_1km_mean ]
+# MAGIC
 
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from cube_3_c
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from LTA_analysis
+# MAGIC --LTA_analysis
+# MAGIC
+# MAGIC GDMP LTA https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=2021&fileId=1043
+# MAGIC
+
+# COMMAND ----------
+
+,IF(SMA_gs_1km_annual_2001<-1 AND GDMP_1km_anom_2001 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2001
+,IF(SMA_gs_1km_annual_2002<-1 AND GDMP_1km_anom_2002 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2002
+,IF(SMA_gs_1km_annual_2003<-1 AND GDMP_1km_anom_2003 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2003
+,IF(SMA_gs_1km_annual_2004<-1 AND GDMP_1km_anom_2004 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2004
+,IF(SMA_gs_1km_annual_2005<-1 AND GDMP_1km_anom_2005 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2005
+,IF(SMA_gs_1km_annual_2006<-1 AND GDMP_1km_anom_2006 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2006
+,IF(SMA_gs_1km_annual_2007<-1 AND GDMP_1km_anom_2007 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2007
+,IF(SMA_gs_1km_annual_2008<-1 AND GDMP_1km_anom_2008 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2008
+,IF(SMA_gs_1km_annual_2009<-1 AND GDMP_1km_anom_2009 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2009
+,IF(SMA_gs_1km_annual_2010<-1 AND GDMP_1km_anom_2010 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2010
+,IF(SMA_gs_1km_annual_2011<-1 AND GDMP_1km_anom_2011 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2011
+,IF(SMA_gs_1km_annual_2012<-1 AND GDMP_1km_anom_2012 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2012
+,IF(SMA_gs_1km_annual_2013<-1 AND GDMP_1km_anom_2013 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2013
+,IF(SMA_gs_1km_annual_2014<-1 AND GDMP_1km_anom_2014 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2014
+,IF(SMA_gs_1km_annual_2015<-1 AND GDMP_1km_anom_2015 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2015
+,IF(SMA_gs_1km_annual_2016<-1 AND GDMP_1km_anom_2016 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2016
+,IF(SMA_gs_1km_annual_2017<-1 AND GDMP_1km_anom_2017 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2017
+,IF(SMA_gs_1km_annual_2018<-1 AND GDMP_1km_anom_2018 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2018
+,IF(SMA_gs_1km_annual_2019<-1 AND GDMP_1km_anom_2019 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2019
+,IF(SMA_gs_1km_annual_2020<-1 AND GDMP_1km_anom_2020 <0, ref_cube.AreaHa ,0)                    as annual_drought_impact_area_2020
+----------------- divided by 20year
+
+= LTA_area
+
+
+
+
+
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+# MAGIC
+# MAGIC %sql ----TESTING CUBE 4
+# MAGIC SELECT  
+# MAGIC  ref_cube.admin_category
+# MAGIC ,ref_cube.GridNum10km
+# MAGIC ,ref_cube.GridNum1km
+# MAGIC ,ref_cube.LULUCF_CODE
+# MAGIC ,ref_cube.env_zones
+# MAGIC ,ref_cube.natura2000_protection
+# MAGIC ,ref_cube.AreaHa 
+# MAGIC
+# MAGIC
+# MAGIC ,(if(GDMP_2001_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2001_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2002_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2002_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2003_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2003_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2004_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2004_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2005_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2005_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2006_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2006_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2007_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2007_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2008_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2008_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2009_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2009_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2010_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2010_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2011_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2011_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2012_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2012_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2013_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2013_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2014_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2014_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2015_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2015_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2016_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2016_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2017_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2017_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2018_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2018_pv_1000m_EPSG3035,0)  +
+# MAGIC  if(GDMP_2019_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2019_pv_1000m_EPSG3035,0)   +
+# MAGIC  if(GDMP_2020_pv_300to1000m_EPSG3035  IS NOT NULL,GDMP_2020_pv_300to1000m_EPSG3035,0) )/20  as GDMP_1km_mean_2001_2020_validation
+# MAGIC
+# MAGIC ,gdmp_1km_statistic_c.GDMP_1km_mean as GDMP_1km_mean_2001_2020
+# MAGIC
+# MAGIC
+# MAGIC ,if(GDMP_2000_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2000_pv_1000m_EPSG3035,0)           as GDMP_2000_pv  --OK
+# MAGIC ,SMA_gs_1km_annual_2000
+# MAGIC ,GDMP_1km_anom_2000
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC --,IF(SMA_gs_1km_annual_2000<-1 AND GDMP_1km_anom_2000<0, GDMP_1km_anom_2000 ,0 ) as annual_drought_impact_intensity_relative_2000 
+# MAGIC --,IF(SMA_gs_1km_annual_2000<-1 AND GDMP_1km_anom_2000 <0, GDMP_2000_pv_1000m_EPSG3035 ,0 )  as annual_drought_impact_intensity_absolute_2000 
+# MAGIC ,IF(SMA_gs_1km_annual_2000<-1 AND GDMP_1km_anom_2000 <0,GDMP_2000_pv-GDMP_1km_mean , 0) as  Annual_drought_induced_productivity_deficit_2000
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC ----,if(GDMP_2000_pv_1000m_EPSG3035  IS NOT NULL,GDMP_2000_pv_1000m_EPSG3035,0)  -IF(SMA_gs_1km_annual_2000<-1 AND GDMP_1km_anom_2000 <0, GDMP_2000_pv_1000m_EPSG3035 ,0 )      as test2000
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC from
+# MAGIC   ref_cube
+# MAGIC LEFT JOIN gdmp_1km_pv on gdmp_1km_pv.gridnum   =ref_cube.GridNum1km  ---1km JOIN!!!
+# MAGIC LEFT JOIN SMA_gs_1km_annual on SMA_gs_1km_annual.gridnum              =ref_cube.GridNum1km  ---1km JOIN!!!
+# MAGIC LEFT JOIN gdmp_1km_statistic_c on gdmp_1km_statistic_c.gridnum              =ref_cube.GridNum1km  ---1km JOIN!!!
+# MAGIC
+# MAGIC where SMA_gs_1km_annual_2000<-1 AND GDMP_1km_anom_2000 <0
+# MAGIC limit 10
+# MAGIC
 
 # COMMAND ----------
 
@@ -1900,78 +2200,6 @@ SELECT
                 ,SUM(GDMP_2021_pv) as GDMP_2021_pv
                 ,SUM(GDMP_2022_pv) as GDMP_2022_pv
 
-                --SUM:
-                ,SUM(annual_drought_impact_area_2000) as annual_drought_impact_area_2000
-                ,SUM(annual_drought_impact_area_2001) as annual_drought_impact_area_2001
-                ,SUM(annual_drought_impact_area_2002) as annual_drought_impact_area_2002
-                ,SUM(annual_drought_impact_area_2003) as annual_drought_impact_area_2003
-                ,SUM(annual_drought_impact_area_2004) as annual_drought_impact_area_2004
-                ,SUM(annual_drought_impact_area_2005) as annual_drought_impact_area_2005
-                ,SUM(annual_drought_impact_area_2006) as annual_drought_impact_area_2006
-                ,SUM(annual_drought_impact_area_2007) as annual_drought_impact_area_2007
-                ,SUM(annual_drought_impact_area_2008) as annual_drought_impact_area_2008
-                ,SUM(annual_drought_impact_area_2009) as annual_drought_impact_area_2009
-                ,SUM(annual_drought_impact_area_2010) as annual_drought_impact_area_2010
-                ,SUM(annual_drought_impact_area_2011) as annual_drought_impact_area_2011
-                ,SUM(annual_drought_impact_area_2012) as annual_drought_impact_area_2012
-                ,SUM(annual_drought_impact_area_2013) as annual_drought_impact_area_2013
-                ,SUM(annual_drought_impact_area_2014) as annual_drought_impact_area_2014
-                ,SUM(annual_drought_impact_area_2015) as annual_drought_impact_area_2015
-                ,SUM(annual_drought_impact_area_2016) as annual_drought_impact_area_2016
-                ,SUM(annual_drought_impact_area_2017) as annual_drought_impact_area_2017
-                ,SUM(annual_drought_impact_area_2018) as annual_drought_impact_area_2018
-                ,SUM(annual_drought_impact_area_2019) as annual_drought_impact_area_2019
-                ,SUM(annual_drought_impact_area_2020) as annual_drought_impact_area_2020
-                ,SUM(annual_drought_impact_area_2021) as annual_drought_impact_area_2021
-                ,SUM(annual_drought_impact_area_2022) as annual_drought_impact_area_2022
-                --Weighted avg:
-                ,SUM(annual_drought_impact_intensity_relative_2000* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2000
-                ,SUM(annual_drought_impact_intensity_relative_2001* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2001
-                ,SUM(annual_drought_impact_intensity_relative_2002* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2002
-                ,SUM(annual_drought_impact_intensity_relative_2003* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2003
-                ,SUM(annual_drought_impact_intensity_relative_2004* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2004
-                ,SUM(annual_drought_impact_intensity_relative_2005* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2005
-                ,SUM(annual_drought_impact_intensity_relative_2006* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2006
-                ,SUM(annual_drought_impact_intensity_relative_2007* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2007
-                ,SUM(annual_drought_impact_intensity_relative_2008* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2008
-                ,SUM(annual_drought_impact_intensity_relative_2009* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2009
-                ,SUM(annual_drought_impact_intensity_relative_2010* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2010
-                ,SUM(annual_drought_impact_intensity_relative_2011* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2011
-                ,SUM(annual_drought_impact_intensity_relative_2012* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2012
-                ,SUM(annual_drought_impact_intensity_relative_2013* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2013
-                ,SUM(annual_drought_impact_intensity_relative_2014* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2014
-                ,SUM(annual_drought_impact_intensity_relative_2015* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2015
-                ,SUM(annual_drought_impact_intensity_relative_2016* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2016
-                ,SUM(annual_drought_impact_intensity_relative_2017* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2017
-                ,SUM(annual_drought_impact_intensity_relative_2018* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2018
-                ,SUM(annual_drought_impact_intensity_relative_2019* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2019
-                ,SUM(annual_drought_impact_intensity_relative_2020* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2020
-                ,SUM(annual_drought_impact_intensity_relative_2021* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2021
-                ,SUM(annual_drought_impact_intensity_relative_2022* AreaHa )/ SUM(AreaHa)  as annual_drought_impact_intensity_relative_2022
-                --SUM: (absolute)
-                ,SUM(annual_drought_impact_intensity_absolute_2000) as annual_drought_impact_intensity_absolute_2000
-                ,SUM(annual_drought_impact_intensity_absolute_2001) as annual_drought_impact_intensity_absolute_2001
-                ,SUM(annual_drought_impact_intensity_absolute_2002) as annual_drought_impact_intensity_absolute_2002
-                ,SUM(annual_drought_impact_intensity_absolute_2003) as annual_drought_impact_intensity_absolute_2003
-                ,SUM(annual_drought_impact_intensity_absolute_2004) as annual_drought_impact_intensity_absolute_2004
-                ,SUM(annual_drought_impact_intensity_absolute_2005) as annual_drought_impact_intensity_absolute_2005
-                ,SUM(annual_drought_impact_intensity_absolute_2006) as annual_drought_impact_intensity_absolute_2006
-                ,SUM(annual_drought_impact_intensity_absolute_2007) as annual_drought_impact_intensity_absolute_2007
-                ,SUM(annual_drought_impact_intensity_absolute_2008) as annual_drought_impact_intensity_absolute_2008
-                ,SUM(annual_drought_impact_intensity_absolute_2009) as annual_drought_impact_intensity_absolute_2009
-                ,SUM(annual_drought_impact_intensity_absolute_2010) as annual_drought_impact_intensity_absolute_2010
-                ,SUM(annual_drought_impact_intensity_absolute_2011) as annual_drought_impact_intensity_absolute_2011
-                ,SUM(annual_drought_impact_intensity_absolute_2012) as annual_drought_impact_intensity_absolute_2012
-                ,SUM(annual_drought_impact_intensity_absolute_2013) as annual_drought_impact_intensity_absolute_2013
-                ,SUM(annual_drought_impact_intensity_absolute_2014) as annual_drought_impact_intensity_absolute_2014
-                ,SUM(annual_drought_impact_intensity_absolute_2015) as annual_drought_impact_intensity_absolute_2015
-                ,SUM(annual_drought_impact_intensity_absolute_2016) as annual_drought_impact_intensity_absolute_2016
-                ,SUM(annual_drought_impact_intensity_absolute_2017) as annual_drought_impact_intensity_absolute_2017
-                ,SUM(annual_drought_impact_intensity_absolute_2018) as annual_drought_impact_intensity_absolute_2018
-                ,SUM(annual_drought_impact_intensity_absolute_2019) as annual_drought_impact_intensity_absolute_2019
-                ,SUM(annual_drought_impact_intensity_absolute_2020) as annual_drought_impact_intensity_absolute_2020
-                ,SUM(annual_drought_impact_intensity_absolute_2021) as annual_drought_impact_intensity_absolute_2021
-                ,SUM(annual_drought_impact_intensity_absolute_2022) as annual_drought_impact_intensity_absolute_2022
 
                 from cube_2_f
 
