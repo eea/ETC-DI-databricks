@@ -295,6 +295,23 @@
 -- MAGIC // https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=1519&fileId=544&successMessage=true
 -- MAGIC // cwsblobstorage01/cwsblob01/Dimensions/D_EnvZones_544_2020528_100m
 -- MAGIC
+-- MAGIC ///   -  Category: 
+-- MAGIC ///   -  MDN
+-- MAGIC ///   -  NEM
+-- MAGIC ///   -  ATC
+-- MAGIC ///   -  ALS
+-- MAGIC ///   -  ATN
+-- MAGIC ///   -  PAN
+-- MAGIC ///   -  ALN
+-- MAGIC ///   -  BOR
+-- MAGIC ///   -  CON
+-- MAGIC ///   -  MDS
+-- MAGIC ///   -  MDM
+-- MAGIC ///   -  ARC
+-- MAGIC ///   -  MAC
+-- MAGIC ///   -  LUS
+-- MAGIC ///   -  ANA
+-- MAGIC
 -- MAGIC val parquetFileDF_env_zones = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_EnvZones_544_2020528_100m/")
 -- MAGIC parquetFileDF_env_zones.createOrReplaceTempView("env_zones")
 -- MAGIC
@@ -432,7 +449,9 @@ show columns from  LUT_clc_classes
 -- COMMAND ----------
 
 
-SELECT	* from dem_1km_slope_classes
+SELECT	Category from env_zones
+
+group by Category
 
 -- COMMAND ----------
 
@@ -496,8 +515,52 @@ show columns from Pa2022_100m_NET
 
 -- COMMAND ----------
 
+
+
+-- COMMAND ----------
+
 -- MAGIC %md
--- MAGIC ### 1.2 Building afforestation mask (cube-strata)
+-- MAGIC ### 1.2 Loading LookUpTables for the model
+
+-- COMMAND ----------
+
+-- MAGIC %python
+-- MAGIC ## This notebook imported the pyhton-data frame into a SQL table:
+-- MAGIC
+-- MAGIC ########### LUT (1) Forest Zone: ############################################
+-- MAGIC # IMPORT tables 
+-- MAGIC import pandas as pd
+-- MAGIC LUT_FOREST_ZONE_table = pd.read_csv("./tables/LUT_FOREST_ZONE.csv")
+-- MAGIC # dataframe to table:
+-- MAGIC df_LUT_FOREST_ZONE = spark.createDataFrame(LUT_FOREST_ZONE_table)
+-- MAGIC df_LUT_FOREST_ZONE.createOrReplaceTempView("LUT_FOREST_ZONE")
+-- MAGIC
+-- MAGIC ########### LUT (2) Conversion_LU_LEVEL_SOC ####################################
+-- MAGIC # IMPORT tables 
+-- MAGIC
+-- MAGIC LUT_LEVEL_SOC_classif_table = pd.read_csv("./tables/LUT_CONVERSION_LU_LEVEL_SOC_classif.csv")
+-- MAGIC # dataframe to table:
+-- MAGIC df_LUT_CONVERSION_LU_LEVEL_SOC_classif = spark.createDataFrame(LUT_LEVEL_SOC_classif_table)
+-- MAGIC df_LUT_CONVERSION_LU_LEVEL_SOC_classif.createOrReplaceTempView("LUT_CONVERSION_LU_LEVEL_SOC_classif")
+-- MAGIC
+-- MAGIC
+-- MAGIC
+-- MAGIC
+-- MAGIC
+
+-- COMMAND ----------
+
+select * from LUT_CONVERSION_LU_LEVEL_SOC_classif
+
+-- COMMAND ----------
+
+-- MAGIC %scala
+-- MAGIC val LUT_FOREST_ZONE = spark.sql("select * from testDF")
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### 1.3 Building afforestation mask (cube-strata)
 
 -- COMMAND ----------
 
