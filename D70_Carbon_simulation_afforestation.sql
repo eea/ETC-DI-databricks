@@ -1,11 +1,10 @@
 -- Databricks notebook source
 -- MAGIC %md
--- MAGIC # IPCC Tier 2 method LB (Living Biomass) increase simulation for afferestation on cropland and grassland
+-- MAGIC # Carbon simulation for afferestation 
+-- MAGIC (SOC & living biomass)
 -- MAGIC
 -- MAGIC
--- MAGIC In this example notebook the impact on the LB for a certain prototype configuration will be calculated and visualized. This notebook is developed in such a way, that that user can play around with different configurations and analyze the outcome.
 -- MAGIC
--- MAGIC The IPCC layers and and needed LUT tables will be used in the first place to enable this simulation
 -- MAGIC
 -- MAGIC
 
@@ -220,6 +219,7 @@
 -- MAGIC val lULUCF_sq1 = spark.sql(""" 
 -- MAGIC                    SELECT                
 -- MAGIC                   CLC_2018.GridNum,
+-- MAGIC                   ----CLC_2018.GridNum &  -16777216 as GridNum1km,
 -- MAGIC                   CLC_2018.GridNum10km,                     
 -- MAGIC                   ---CONCAT('MAES_',LUT_clc_classes.MAES_CODE) as MAES_CODE ,   
 -- MAGIC                   LULUCF_CODE,   
@@ -237,7 +237,8 @@
 -- MAGIC val clc_sq1 = spark.sql(""" 
 -- MAGIC                    SELECT                
 -- MAGIC                   CLC_2018.GridNum
--- MAGIC                   ,CLC_2018.GridNum10km                        
+-- MAGIC                   ,CLC_2018.GridNum10km      
+-- MAGIC                   ,CLC_2018.GridNum &  -16777216 as GridNum1km         
 -- MAGIC                   ,CLC_2018.AreaHa
 -- MAGIC
 -- MAGIC                   ,LUT_clc_classes.LEVEL3_CODE
@@ -415,22 +416,81 @@
 -- MAGIC ///45.00,77.241341,6,ValueToValue
 -- MAGIC //cwsblobstorage01/cwsblob01/Dimensions/D_EU_DEM_Slope_1Km_541_2020526_1km
 -- MAGIC
--- MAGIC val parquetFileDF_dem_1km_slope = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_EU_DEM_Slope_1Km_541_2020526_1km/")
--- MAGIC parquetFileDF_dem_1km_slope.createOrReplaceTempView("dem_1km_slope")
+-- MAGIC //val parquetFileDF_dem_1km_slope = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_EU_DEM_Slope_1Km_541_2020526_1km/")
+-- MAGIC //parquetFileDF_dem_1km_slope.createOrReplaceTempView("dem_1km_slope")
+-- MAGIC //
+-- MAGIC //// next re-classify percent-slope into the three classes flat, moderate and steep:
+-- MAGIC //val dem_1km_slope_classes = spark.sql(""" 
+-- MAGIC //select 
+-- MAGIC //  GridNum10km
+-- MAGIC //  , GridNum as GridNum_1km 
+-- MAGIC //--,Category_Slope_Percent_EU_DEM_1Km as slope_percent
+-- MAGIC //  , if(Category_Slope_Percent_EU_DEM_1Km <= 15, 'FLAT',if(Category_Slope_Percent_EU_DEM_1Km <= 30, 'MODERATE',if(Category_Slope_Percent_EU_DEM_1Km < 87.51, 'STEEP',//NULL))) as slope_class
+-- MAGIC //  , AreaHa
+-- MAGIC //  from dem_1km_slope
+-- MAGIC //  where Category_Slope_Percent_EU_DEM_1Km is not null
+-- MAGIC //
+-- MAGIC //""")
+-- MAGIC //dem_1km_slope_classes.createOrReplaceTempView("dem_1km_slope_classes")  
 -- MAGIC
--- MAGIC // next re-classify percent-slope into the three classes flat, moderate and steep:
--- MAGIC val dem_1km_slope_classes = spark.sql(""" 
--- MAGIC select 
--- MAGIC   GridNum10km
--- MAGIC   , GridNum as GridNum_1km 
--- MAGIC   ---,Category_Slope_Percent_EU_DEM_1Km as slope_percent
--- MAGIC   , if(Category_Slope_Percent_EU_DEM_1Km <= 15, 'FLAT',if(Category_Slope_Percent_EU_DEM_1Km <= 30, 'MODERATE',if(Category_Slope_Percent_EU_DEM_1Km < 10000, 'STEEP',NULL))) as slope_class
--- MAGIC   , AreaHa
--- MAGIC   from dem_1km_slope
+-- MAGIC
+-- MAGIC
+-- MAGIC //##########################################################################################################################################
+-- MAGIC //// (12) EU-DEM slope ##############################################################################                 100m DIM  
+-- MAGIC //##########################################################################################################################################
+-- MAGIC //https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=2054&fileId=1076
+-- MAGIC //cwsblobstorage01/cwsblob01/Dimensions/D_EU_DEM_SLOPE_100m_1076_20231128_100m
+-- MAGIC
+-- MAGIC val parquetFileDF_dem_100m_slope = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_EU_DEM_SLOPE_100m_1076_20231128_100m/")
+-- MAGIC parquetFileDF_dem_100m_slope.createOrReplaceTempView("dem_100m_slope")
+-- MAGIC
+-- MAGIC val dem_100m_slope_2 = spark.sql(""" 
+-- MAGIC select  *, if(eudem_slop_3035_europe_100m_using_AVG <= 15, 'FLAT',if(eudem_slop_3035_europe_100m_using_AVG <= 30, 
+-- MAGIC                                                          'MODERATE',if(eudem_slop_3035_europe_100m_using_AVG  < 87.5, 'STEEP',NULL))) as slope_class
+-- MAGIC
+-- MAGIC   from dem_100m_slope
 -- MAGIC
 -- MAGIC """)
--- MAGIC dem_1km_slope_classes.createOrReplaceTempView("dem_1km_slope_classes")  
+-- MAGIC dem_100m_slope_2.createOrReplaceTempView("dem_100m_slope2")  
 -- MAGIC
+-- MAGIC
+-- MAGIC
+-- MAGIC /////############ slope lookup table:
+-- MAGIC /////https://jedi.discomap.eea.europa.eu/Lookup/Show?lookUpId=157&successMessage=True
+-- MAGIC /////cwsblobstorage01/cwsblob01/Lookups/EU_DEM_SLOPE_lutab/20231128141613.423.csv
+-- MAGIC ///
+-- MAGIC ///val schema_slope= new StructType()
+-- MAGIC ///.add("DN",IntegerType,true)
+-- MAGIC ///.add("slope_deg",FloatType,true)
+-- MAGIC ///.add("slope_percent",FloatType,true)
+-- MAGIC ///
+-- MAGIC ///val LUT_slope  = spark.read.format("csv")
+-- MAGIC /// .options(Map("delimiter"->"|"))
+-- MAGIC /// .schema(schema_slope)
+-- MAGIC /// .load("dbfs:/mnt/trainingDatabricks/Lookups/EU_DEM_SLOPE_lutab/20231128141613.423.csv")
+-- MAGIC ///LUT_slope.createOrReplaceTempView("LUT_slope")
+-- MAGIC ///
+-- MAGIC ///val dem_100m_slope = spark.sql(""" 
+-- MAGIC ///select  *
+-- MAGIC ///  from dem_100m_slope2
+-- MAGIC ///left join LUT_slope on LUT_slope.DN = dem_100m_slope2.slope_category
+-- MAGIC ///
+-- MAGIC ///""")
+-- MAGIC ///dem_100m_slope.createOrReplaceTempView("dem_100m_slope_degree")  
+-- MAGIC
+-- MAGIC
+-- MAGIC ///##########################################################################################################################################
+-- MAGIC //// 10.1 (SOC)  ISRIC SOC 0-30 cm################################################################################                 100m DIM
+-- MAGIC //##########################################################################################################################################
+-- MAGIC //   Organic Carbon Stock from ISRIC
+-- MAGIC //   mean rescaled at 100m
+-- MAGIC //   values expressed as t/ha
+-- MAGIC //   data provided by VITO
+-- MAGIC //   S:\Common workspace\ETC_DI\f03_JEDI_PREPARATION\f01_dims\SOC_mapping\ISRIC
+-- MAGIC //   https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=1947&fileId=972
+-- MAGIC ///  cwsblobstorage01/cwsblob01/Dimensions/D_isricsoc030_972_2023216_100m
+-- MAGIC val parquetFileDF_isric_30 = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_isricsoc030_972_2023216_100m/")
+-- MAGIC parquetFileDF_isric_30.createOrReplaceTempView("isric_30")
 -- MAGIC
 -- MAGIC
 -- MAGIC
@@ -440,11 +500,13 @@
 
 -- COMMAND ----------
 
+select slope_class, sum(AreaHa) as AreaHa
+,max(eudem_slop_3035_europe_100m_using_AVG) as max
+,min(eudem_slop_3035_europe_100m_using_AVG) as min
+,avg(eudem_slop_3035_europe_100m_using_AVG) as avg
+  from dem_100m_slope2
 
-
--- COMMAND ----------
-
-show columns from  LUT_clc_classes
+group by slope_class
 
 -- COMMAND ----------
 
@@ -544,23 +606,310 @@ show columns from Pa2022_100m_NET
 -- MAGIC df_LUT_CONVERSION_LU_LEVEL_SOC_classif.createOrReplaceTempView("LUT_CONVERSION_LU_LEVEL_SOC_classif")
 -- MAGIC
 -- MAGIC
+-- MAGIC ########### LUT (3) STRATA LU ####################################
+-- MAGIC # IMPORT tables 
+-- MAGIC
+-- MAGIC LUT_Stratification_SOC_table = pd.read_csv("./tables/Stratification_SOC_LU_classes_LEVELSOC_classif_expanded_s4e.csv")
+-- MAGIC # dataframe to table:
+-- MAGIC df_LUT_strata = spark.createDataFrame(LUT_Stratification_SOC_table)
+-- MAGIC df_LUT_strata.createOrReplaceTempView("LUT_strata_soc")
 -- MAGIC
 -- MAGIC
 -- MAGIC
+
+-- COMMAND ----------
+
+
+select LU_RANGE, LU_CAT  from LUT_strata_soc
+
+where  LU_CAT like 'Pasture'
+group by all
 
 -- COMMAND ----------
 
 select * from LUT_CONVERSION_LU_LEVEL_SOC_classif
 
--- COMMAND ----------
-
--- MAGIC %scala
--- MAGIC val LUT_FOREST_ZONE = spark.sql("select * from testDF")
 
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC ### 1.3 Building afforestation mask (cube-strata)
+-- MAGIC ### 1.3 Building afforestation SOC  mask (cube-strata) for natura 2000 (min max ,.. per nut3 region) Kaspers model
+-- MAGIC - first avg, min, max, sum SOC for STRATA then SOC by nuts3 & strata
+
+-- COMMAND ----------
+
+select * from LUT_nuts2021 
+
+where  LEVEL3_code like 'NL310'
+
+-- COMMAND ----------
+
+---- testing ISRIC 30 cm:
+
+SELECT sum(
+AreaHa) from D_admbndEEA39v2021
+
+
+where category = 645
+group by category
+
+-- COMMAND ----------
+
+   
+   ---- Testing SOC (avg, min, max for selected strata:)
+   SELECT 
+
+clc_2018_100m.LEVEL3_CODE as CLC_level3_code
+
+,clc_2018_100m.LULUCF_CODE
+,clc_2018_100m.LULUCF_DESCRIPTION
+,clc_2018_100m.AreaHa
+,env_zones.Category as env_zone
+-----,PA_2022_protection
+----,natura2000_protection
+,slope_class
+
+
+,sum(isric_30.ocs030cm100m) as SOC_0_30cm_SUM
+,avg(isric_30.ocs030cm100m) as SOC_0_30cm_AVG
+,min(isric_30.ocs030cm100m) as SOC_0_30cm_MIN
+,max(isric_30.ocs030cm100m) as SOC_0_30cm_MAX
+from clc_2018_100m
+
+
+
+
+left JOIN env_zones           on     env_zones.gridnum = clc_2018_100m.gridnum 
+left JOIN Natura2000_100m_NET on     Natura2000_100m_NET.gridnum = clc_2018_100m.gridnum 
+----left JOIN Pa2022_100m_NET     on     Pa2022_100m_NET.gridnum = clc_2018_100m.gridnum 
+left JOIN isric_30     on     isric_30.gridnum = clc_2018_100m.gridnum 
+left JOIN dem_100m_slope2     on     dem_100m_slope2.gridnum = clc_2018_100m.gridnum  
+
+group by 
+
+clc_2018_100m.LEVEL3_CODE 
+
+,clc_2018_100m.LULUCF_CODE
+,clc_2018_100m.LULUCF_DESCRIPTION
+,clc_2018_100m.AreaHa
+,env_zones.Category 
+-----,PA_2022_protection
+----,natura2000_protection
+,slope_class
+
+
+
+
+-- COMMAND ----------
+
+select * from CLC_2018
+
+-- COMMAND ----------
+
+select * from nuts3_2021
+
+-- COMMAND ----------
+
+ SELECT
+ ----- Testing
+
+
+
+ nuts3_2021.ADM_ID
+,nuts3_2021.ADM_COUNTRY
+,nuts3_2021.TAA
+,nuts3_2021.LEVEL3_code as nuts3_code
+,Category
+,SUM(nuts3_2021.AreaHa) AreaHa
+
+
+from nuts3_2021
+
+
+
+
+where nuts3_2021.LEVEL3_code like 'NL310'
+
+group by 
+
+ nuts3_2021.ADM_ID
+ ,Category
+,nuts3_2021.ADM_COUNTRY
+,nuts3_2021.TAA
+,nuts3_2021.LEVEL3_code 
+
+
+
+-- COMMAND ----------
+
+ SELECT
+
+ -- testing
+
+ nuts3_2021.ADM_ID
+,nuts3_2021.ADM_COUNTRY
+,nuts3_2021.TAA
+,nuts3_2021.LEVEL3_code as nuts3_code
+,nuts3_2021.AreaHa
+
+
+,LUT_strata_soc.STRATA_ID -----------------------------------
+,clc_2018_100m.LEVEL3_CODE as CLC_level3_code
+,env_zones.Category as env_zone
+----,PA_2022_protection
+
+----,natura2000_protection
+,slope_class
+,isric_30.ocs030cm100m as SOC_0_30cm
+
+from nuts3_2021
+
+left JOIN clc_2018_100m       on     clc_2018_100m.gridnum = nuts3_2021.gridnum 
+left JOIN env_zones           on     env_zones.gridnum = nuts3_2021.gridnum 
+left JOIN Natura2000_100m_NET on     Natura2000_100m_NET.gridnum = nuts3_2021.gridnum 
+left JOIN Pa2022_100m_NET     on     Pa2022_100m_NET.gridnum = nuts3_2021.gridnum 
+
+left JOIN isric_30     on     isric_30.gridnum = nuts3_2021.gridnum 
+
+left JOIN dem_100m_slope2     on     dem_100m_slope2.gridnum = clc_2018_100m.gridnum  
+
+
+left JOIN  LUT_strata_soc                      on LUT_strata_soc.LU_RANGE = clc_2018_100m.LEVEL3_CODE AND
+                                                  LUT_strata_soc.SLOPE_CAT =  dem_100m_slope2.slope_class AND
+                                                  LUT_strata_soc.ENV_CAT_CODE =  env_zones.Category --
+
+where nuts3_2021.LEVEL3_code = 'NL310'
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC #### 1.3.1.Exporting cube SOC-afforestation
+
+-- COMMAND ----------
+
+-- MAGIC %scala
+-- MAGIC
+-- MAGIC /// export cube
+-- MAGIC val afforestation_cube_1 = spark.sql("""              
+-- MAGIC     
+-- MAGIC  SELECT
+-- MAGIC  nuts3_2021.ADM_ID
+-- MAGIC ,nuts3_2021.ADM_COUNTRY
+-- MAGIC ,nuts3_2021.TAA
+-- MAGIC ,nuts3_2021.LEVEL3_code as nuts3_code
+-- MAGIC ,nuts3_2021.AreaHa
+-- MAGIC
+-- MAGIC
+-- MAGIC ,LUT_strata_soc.STRATA_ID -----------------------------------
+-- MAGIC ,clc_2018_100m.LEVEL3_CODE as CLC_level3_code
+-- MAGIC ,env_zones.Category as env_zone
+-- MAGIC ----,PA_2022_protection
+-- MAGIC
+-- MAGIC ----,natura2000_protection
+-- MAGIC ,slope_class
+-- MAGIC ,isric_30.ocs030cm100m as SOC_0_30cm
+-- MAGIC
+-- MAGIC from nuts3_2021
+-- MAGIC
+-- MAGIC left JOIN clc_2018_100m       on     clc_2018_100m.gridnum = nuts3_2021.gridnum 
+-- MAGIC left JOIN env_zones           on     env_zones.gridnum = nuts3_2021.gridnum 
+-- MAGIC left JOIN Natura2000_100m_NET on     Natura2000_100m_NET.gridnum = nuts3_2021.gridnum 
+-- MAGIC left JOIN Pa2022_100m_NET     on     Pa2022_100m_NET.gridnum = nuts3_2021.gridnum 
+-- MAGIC
+-- MAGIC left JOIN isric_30     on     isric_30.gridnum = nuts3_2021.gridnum 
+-- MAGIC
+-- MAGIC left JOIN dem_100m_slope2     on     dem_100m_slope2.gridnum = clc_2018_100m.gridnum  
+-- MAGIC
+-- MAGIC
+-- MAGIC left JOIN  LUT_strata_soc                      on LUT_strata_soc.LU_RANGE = clc_2018_100m.LEVEL3_CODE AND
+-- MAGIC                                                   LUT_strata_soc.SLOPE_CAT =  dem_100m_slope2.slope_class AND
+-- MAGIC                                                   LUT_strata_soc.ENV_CAT_CODE =  env_zones.Category --
+-- MAGIC
+-- MAGIC ----where nuts3_2021.LEVEL3_code = 'NL310'
+-- MAGIC
+-- MAGIC
+-- MAGIC                  """)    
+-- MAGIC
+-- MAGIC
+-- MAGIC afforestation_cube_1.createOrReplaceTempView("afforestation_cube_1")  
+-- MAGIC
+-- MAGIC
+-- MAGIC
+-- MAGIC val afforestation_cube_2 = spark.sql("""              
+-- MAGIC     
+-- MAGIC select 
+-- MAGIC
+-- MAGIC         nuts3_code
+-- MAGIC         ,TAA
+-- MAGIC         ,STRATA_ID
+-- MAGIC         ,CLC_level3_code
+-- MAGIC         ,env_zone
+-- MAGIC         -----,PA_2022_protection
+-- MAGIC         ----,natura2000_protection
+-- MAGIC         ,slope_class
+-- MAGIC
+-- MAGIC         , SUM(AreaHa) as AreaHa
+-- MAGIC         ,SUM(SOC_0_30cm) as SOC_0_30cm_tonnes
+-- MAGIC
+-- MAGIC         from afforestation_cube_1
+-- MAGIC
+-- MAGIC
+-- MAGIC         group by
+-- MAGIC         nuts3_code
+-- MAGIC         ,TAA
+-- MAGIC         ,STRATA_ID
+-- MAGIC         ,CLC_level3_code
+-- MAGIC         ,env_zone
+-- MAGIC         ---,PA_2022_protection
+-- MAGIC         ----,natura2000_protection
+-- MAGIC         ,slope_class
+-- MAGIC
+-- MAGIC                  """)    
+-- MAGIC
+-- MAGIC
+-- MAGIC afforestation_cube_2
+-- MAGIC
+-- MAGIC   .coalesce(1) //be careful with this
+-- MAGIC   .write.format("com.databricks.spark.csv")
+-- MAGIC   .mode(SaveMode.Overwrite)
+-- MAGIC   .option("sep","|")
+-- MAGIC   .option("overwriteSchema", "true")
+-- MAGIC   .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+-- MAGIC   .option("emptyValue", "")
+-- MAGIC   .option("header","true")
+-- MAGIC
+-- MAGIC   ///.option("encoding", "UTF-16")  /// check ENCODING
+-- MAGIC
+-- MAGIC   .option("treatEmptyValuesAsNulls", "true")  
+-- MAGIC   
+-- MAGIC   .save("dbfs:/mnt/trainingDatabricks/ExportTable/carbon_mapping/afforestation_simulation/afforestation_soc_cube_2")
+-- MAGIC
+-- MAGIC
+-- MAGIC
+-- MAGIC afforestation_cube_2.createOrReplaceTempView("afforestation_cube_2")  
+
+-- COMMAND ----------
+
+-- MAGIC %python
+-- MAGIC
+-- MAGIC ### Reading URL of resulting table: (for downloading to EEA greenmonkey)
+-- MAGIC folder ="dbfs:/mnt/trainingDatabricks/ExportTable/carbon_mapping/afforestation_simulation/afforestation_soc_cube_2"
+-- MAGIC folder_output =folder[29:]
+-- MAGIC for file in dbutils.fs.ls(folder):
+-- MAGIC     if file.name[-2:] =="gz":
+-- MAGIC         print ("Exported file:")
+-- MAGIC         print(file.name)
+-- MAGIC         print ("Exported URL:")
+-- MAGIC         URL = "https://cwsblobstorage01.blob.core.windows.net/cwsblob01"+"/"+folder_output +"/"+file.name
+-- MAGIC         print ("-------------------------------------")
+-- MAGIC         print ("CUBE 2 can be downloaded using following link:")
+-- MAGIC         print (URL)
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### 1.4 Building afforestation SOC  mask (cube-strata) for natura 2000 (pixel based -manuels model)
+-- MAGIC
 
 -- COMMAND ----------
 
@@ -583,6 +932,7 @@ SELECT
 ,nuts3_2021.Category
 ,nuts3_2021.AreaHa
 
+,LUT_strata_soc.STRATA_ID -----------------------------------
 
 ,clc_2018_100m.LEVEL3_CODE
 ,clc_2018_100m.LEVEL2_CODE
@@ -601,6 +951,7 @@ SELECT
 ,PA_2022_protection
 ,natura2000_protection
 ,slope_class
+,isric_30.ocs030cm100m as SOC_0_30cm
 
 from nuts3_2021
 
@@ -609,8 +960,251 @@ left JOIN env_zones           on     env_zones.gridnum = nuts3_2021.gridnum
 left JOIN Natura2000_100m_NET on     Natura2000_100m_NET.gridnum = nuts3_2021.gridnum 
 left JOIN Pa2022_100m_NET     on     Pa2022_100m_NET.gridnum = nuts3_2021.gridnum 
 
+left JOIN isric_30     on     isric_30.gridnum = nuts3_2021.gridnum 
 
-left JOIN dem_1km_slope_classes     on     dem_1km_slope_classes.gridnum_1km = nuts3_2021.GridNum1km   --- jon on 1km!!
+
+left JOIN dem_100m_slope2     on     dem_100m_slope2.gridnum = clc_2018_100m.gridnum  
+
+
+left JOIN  LUT_strata_soc                      on LUT_strata_soc.LU_RANGE = clc_2018_100m.LEVEL3_CODE AND
+                                                  LUT_strata_soc.SLOPE_CAT =  dem_100m_slope2.slope_class AND
+                                                  LUT_strata_soc.ENV_CAT_CODE =  env_zones.Category --
+
+where 
+ADM_COUNTRY ='Luxembourg'
+
+
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC #### 1.4.1.Exporting cube SOC-afforestation (STRATA tablea & NUTS3 table SOC)
+
+-- COMMAND ----------
+
+-- MAGIC %scala
+-- MAGIC /// export cube
+-- MAGIC val afforestation_cube_1 = spark.sql("""              
+-- MAGIC      SELECT 
+-- MAGIC
+-- MAGIC  nuts3_2021.ADM_ID
+-- MAGIC ,nuts3_2021.ADM_COUNTRY
+-- MAGIC ,nuts3_2021.TAA
+-- MAGIC --,nuts3_2021.NUTS_EU
+-- MAGIC --,nuts3_2021.LEVEL3_name
+-- MAGIC ,nuts3_2021.LEVEL3_code as nuts3_code
+-- MAGIC --,nuts3_2021.GridNum1km
+-- MAGIC --,nuts3_2021.GridNum10km
+-- MAGIC --,nuts3_2021.GridNum
+-- MAGIC --,nuts3_2021.EU28
+-- MAGIC --,nuts3_2021.EU27_2020
+-- MAGIC --,nuts3_2021.EU27_2007
+-- MAGIC --,nuts3_2021.EEA39
+-- MAGIC --,nuts3_2021.EEA38_2020
+-- MAGIC --,nuts3_2021.Category
+-- MAGIC ,nuts3_2021.AreaHa
+-- MAGIC
+-- MAGIC ,LUT_strata_soc.STRATA_ID -----------------------------------
+-- MAGIC
+-- MAGIC ,clc_2018_100m.LEVEL3_CODE as CLC_level3_code
+-- MAGIC --,clc_2018_100m.LEVEL2_CODE
+-- MAGIC --,clc_2018_100m.LEVEL1_CODE
+-- MAGIC --,clc_2018_100m.LEVEL3_NAME
+-- MAGIC --,clc_2018_100m.LEVEL2_NAME
+-- MAGIC --,clc_2018_100m.LEVEL1_NAME
+-- MAGIC
+-- MAGIC --,clc_2018_100m.MAES_CODE
+-- MAGIC --,clc_2018_100m.MAES_NAME
+-- MAGIC --,clc_2018_100m.LULUCF_CODE
+-- MAGIC --,clc_2018_100m.LULUCF_DESCRIPTION
+-- MAGIC --,clc_2018_100m.LULUCF_CODE_L2
+-- MAGIC --,clc_2018_100m.LULUCF_DESCRIPTION_L2
+-- MAGIC ,env_zones.Category as env_zone
+-- MAGIC ----,PA_2022_protection
+-- MAGIC ----,natura2000_protection
+-- MAGIC ,slope_class
+-- MAGIC ,isric_30.ocs030cm100m as SOC_0_30cm
+-- MAGIC
+-- MAGIC from nuts3_2021
+-- MAGIC
+-- MAGIC left JOIN clc_2018_100m       on     clc_2018_100m.gridnum = nuts3_2021.gridnum 
+-- MAGIC left JOIN env_zones           on     env_zones.gridnum = nuts3_2021.gridnum 
+-- MAGIC ----left JOIN Natura2000_100m_NET on     Natura2000_100m_NET.gridnum = nuts3_2021.gridnum 
+-- MAGIC -----left JOIN Pa2022_100m_NET     on     Pa2022_100m_NET.gridnum = nuts3_2021.gridnum 
+-- MAGIC
+-- MAGIC left JOIN isric_30     on     isric_30.gridnum = nuts3_2021.gridnum 
+-- MAGIC
+-- MAGIC left JOIN dem_100m_slope2     on     dem_100m_slope2.gridnum = clc_2018_100m.gridnum  
+-- MAGIC
+-- MAGIC
+-- MAGIC left JOIN  LUT_strata_soc                      on LUT_strata_soc.LU_RANGE = clc_2018_100m.LEVEL3_CODE AND
+-- MAGIC                                                   LUT_strata_soc.SLOPE_CAT =  dem_100m_slope2.slope_class AND
+-- MAGIC                                                   LUT_strata_soc.ENV_CAT_CODE =  env_zones.Category --
+-- MAGIC
+-- MAGIC ----where ADM_COUNTRY ='Luxembourg'
+-- MAGIC
+-- MAGIC
+-- MAGIC                  """)    
+-- MAGIC
+-- MAGIC afforestation_cube_1.createOrReplaceTempView("afforestation_cube_1")  
+-- MAGIC
+-- MAGIC
+-- MAGIC val afforestation_cube_2 = spark.sql("""              
+-- MAGIC     
+-- MAGIC select 
+-- MAGIC
+-- MAGIC         nuts3_code
+-- MAGIC         ,TAA
+-- MAGIC         ,STRATA_ID
+-- MAGIC         ,CLC_level3_code
+-- MAGIC         ,env_zone
+-- MAGIC         ----,PA_2022_protection
+-- MAGIC         ----,natura2000_protection
+-- MAGIC         ,slope_class
+-- MAGIC
+-- MAGIC         , SUM(AreaHa) as AreaHa
+-- MAGIC         ,SUM(SOC_0_30cm) as SOC_0_30cm_tonnes
+-- MAGIC
+-- MAGIC         from afforestation_cube_1
+-- MAGIC
+-- MAGIC
+-- MAGIC         group by
+-- MAGIC         nuts3_code
+-- MAGIC         ,TAA
+-- MAGIC         ,STRATA_ID
+-- MAGIC         ,CLC_level3_code
+-- MAGIC         ,env_zone
+-- MAGIC         -----,PA_2022_protection
+-- MAGIC         ----,natura2000_protection
+-- MAGIC         ,slope_class
+-- MAGIC
+-- MAGIC                  """)    
+-- MAGIC
+-- MAGIC
+-- MAGIC afforestation_cube_2
+-- MAGIC
+-- MAGIC   .coalesce(1) //be careful with this
+-- MAGIC   .write.format("com.databricks.spark.csv")
+-- MAGIC   .mode(SaveMode.Overwrite)
+-- MAGIC   .option("sep","|")
+-- MAGIC   .option("overwriteSchema", "true")
+-- MAGIC   .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+-- MAGIC   .option("emptyValue", "")
+-- MAGIC   .option("header","true")
+-- MAGIC
+-- MAGIC   ///.option("encoding", "UTF-16")  /// check ENCODING
+-- MAGIC
+-- MAGIC   .option("treatEmptyValuesAsNulls", "true")  
+-- MAGIC   
+-- MAGIC   .save("dbfs:/mnt/trainingDatabricks/ExportTable/carbon_mapping/afforestation_simulation/afforestation_cube_SOC_2")
+-- MAGIC
+-- MAGIC
+-- MAGIC //afforestation_cube_2.createOrReplaceTempView("afforestation_cube_2")  
+-- MAGIC
+-- MAGIC
+-- MAGIC
+-- MAGIC
+-- MAGIC   val afforestation_cube_3 = spark.sql("""              
+-- MAGIC        
+-- MAGIC    ---- Testing SOC (avg, min, max for selected strata:)
+-- MAGIC    SELECT 
+-- MAGIC
+-- MAGIC clc_2018_100m.LEVEL3_CODE as CLC_level3_code
+-- MAGIC
+-- MAGIC ,clc_2018_100m.LULUCF_CODE
+-- MAGIC ,clc_2018_100m.LULUCF_DESCRIPTION
+-- MAGIC ,clc_2018_100m.AreaHa
+-- MAGIC ,env_zones.Category as env_zone
+-- MAGIC -----,PA_2022_protection
+-- MAGIC ----,natura2000_protection
+-- MAGIC ,slope_class
+-- MAGIC
+-- MAGIC
+-- MAGIC ,sum(isric_30.ocs030cm100m) as SOC_0_30cm_SUM
+-- MAGIC ,avg(isric_30.ocs030cm100m) as SOC_0_30cm_AVG
+-- MAGIC ,min(isric_30.ocs030cm100m) as SOC_0_30cm_MIN
+-- MAGIC ,max(isric_30.ocs030cm100m) as SOC_0_30cm_MAX
+-- MAGIC from clc_2018_100m
+-- MAGIC
+-- MAGIC left JOIN env_zones           on     env_zones.gridnum = clc_2018_100m.gridnum 
+-- MAGIC ----left JOIN Natura2000_100m_NET on     Natura2000_100m_NET.gridnum = clc_2018_100m.gridnum 
+-- MAGIC ----left JOIN Pa2022_100m_NET     on     Pa2022_100m_NET.gridnum = clc_2018_100m.gridnum 
+-- MAGIC left JOIN isric_30     on     isric_30.gridnum = clc_2018_100m.gridnum 
+-- MAGIC left JOIN dem_100m_slope2     on     dem_100m_slope2.gridnum = clc_2018_100m.gridnum  
+-- MAGIC
+-- MAGIC group by 
+-- MAGIC
+-- MAGIC clc_2018_100m.LEVEL3_CODE 
+-- MAGIC
+-- MAGIC ,clc_2018_100m.LULUCF_CODE
+-- MAGIC ,clc_2018_100m.LULUCF_DESCRIPTION
+-- MAGIC ,clc_2018_100m.AreaHa
+-- MAGIC ,env_zones.Category 
+-- MAGIC -----,PA_2022_protection
+-- MAGIC ----,natura2000_protection
+-- MAGIC ,slope_class
+-- MAGIC
+-- MAGIC
+-- MAGIC
+-- MAGIC
+-- MAGIC
+-- MAGIC                  """)    
+-- MAGIC
+-- MAGIC
+-- MAGIC afforestation_cube_3
+-- MAGIC
+-- MAGIC   .coalesce(1) //be careful with this
+-- MAGIC   .write.format("com.databricks.spark.csv")
+-- MAGIC   .mode(SaveMode.Overwrite)
+-- MAGIC   .option("sep","|")
+-- MAGIC   .option("overwriteSchema", "true")
+-- MAGIC   .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+-- MAGIC   .option("emptyValue", "")
+-- MAGIC   .option("header","true")
+-- MAGIC
+-- MAGIC   ///.option("encoding", "UTF-16")  /// check ENCODING
+-- MAGIC
+-- MAGIC   .option("treatEmptyValuesAsNulls", "true")  
+-- MAGIC   
+-- MAGIC   .save("dbfs:/mnt/trainingDatabricks/ExportTable/carbon_mapping/afforestation_simulation/afforestation_cube_SOC_3")
+-- MAGIC
+-- MAGIC
+-- MAGIC //afforestation_cube_3.createOrReplaceTempView("afforestation_cube_3")  
+-- MAGIC
+-- MAGIC
+-- MAGIC
+
+-- COMMAND ----------
+
+-- MAGIC %python
+-- MAGIC ### Reading URL of resulting table: (for downloading to EEA greenmonkey)
+-- MAGIC folder ="dbfs:/mnt/trainingDatabricks/ExportTable/carbon_mapping/afforestation_simulation/afforestation_cube_SOC_2"
+-- MAGIC folder_output =folder[29:]
+-- MAGIC for file in dbutils.fs.ls(folder):
+-- MAGIC     if file.name[-2:] =="gz":
+-- MAGIC         print ("Exported file:")
+-- MAGIC         print(file.name)
+-- MAGIC         print ("Exported URL:")
+-- MAGIC         URL = "https://cwsblobstorage01.blob.core.windows.net/cwsblob01"+"/"+folder_output +"/"+file.name
+-- MAGIC         print ("-------------------------------------")
+-- MAGIC         print ("CUBE 2 can be downloaded using following link:")
+-- MAGIC         print (URL)
+-- MAGIC
+-- MAGIC print ("---------------------------------------------------------------------------------")
+-- MAGIC ### Reading URL of resulting table: (for downloading to EEA greenmonkey)
+-- MAGIC folder ="dbfs:/mnt/trainingDatabricks/ExportTable/carbon_mapping/afforestation_simulation/afforestation_cube_SOC_3"
+-- MAGIC folder_output =folder[29:]
+-- MAGIC for file in dbutils.fs.ls(folder):
+-- MAGIC     if file.name[-2:] =="gz":
+-- MAGIC         print ("Exported file:")
+-- MAGIC         print(file.name)
+-- MAGIC         print ("Exported URL:")
+-- MAGIC         URL = "https://cwsblobstorage01.blob.core.windows.net/cwsblob01"+"/"+folder_output +"/"+file.name
+-- MAGIC         print ("-------------------------------------")
+-- MAGIC         print ("CUBE 3 can be downloaded using following link:")
+-- MAGIC         print (URL)
+
+-- COMMAND ----------
 
 
 
@@ -621,90 +1215,6 @@ left JOIN dem_1km_slope_classes     on     dem_1km_slope_classes.gridnum_1km = n
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC ## 2.Exporting cube
--- MAGIC
-
--- COMMAND ----------
-
--- MAGIC %scala
--- MAGIC /// export cube
--- MAGIC val afforestation_cube_1 = spark.sql("""              
--- MAGIC       SELECT 
--- MAGIC
--- MAGIC       nuts3_2021.ADM_ID
--- MAGIC       ,nuts3_2021.ADM_COUNTRY
--- MAGIC       ,nuts3_2021.TAA
--- MAGIC       ,nuts3_2021.NUTS_EU
--- MAGIC       ,nuts3_2021.LEVEL3_name
--- MAGIC       ,nuts3_2021.LEVEL3_code
--- MAGIC       ,nuts3_2021.GridNum1km
--- MAGIC       ,nuts3_2021.GridNum10km
--- MAGIC       ,nuts3_2021.GridNum
--- MAGIC       ,nuts3_2021.EU28
--- MAGIC       ,nuts3_2021.EU27_2020
--- MAGIC       ,nuts3_2021.EU27_2007
--- MAGIC       ,nuts3_2021.EEA39
--- MAGIC       ,nuts3_2021.EEA38_2020
--- MAGIC       ----,nuts3_2021.Category
--- MAGIC       ,nuts3_2021.AreaHa
+-- MAGIC ## 2.TESTING
 -- MAGIC
 -- MAGIC
--- MAGIC       ,clc_2018_100m.LEVEL3_CODE
--- MAGIC       ,clc_2018_100m.LEVEL2_CODE
--- MAGIC       ,clc_2018_100m.LEVEL1_CODE
--- MAGIC       ,clc_2018_100m.LEVEL3_NAME
--- MAGIC       ,clc_2018_100m.LEVEL2_NAME
--- MAGIC       ,clc_2018_100m.LEVEL1_NAME
--- MAGIC
--- MAGIC       ,clc_2018_100m.MAES_CODE
--- MAGIC       ,clc_2018_100m.MAES_NAME
--- MAGIC       ,clc_2018_100m.LULUCF_CODE
--- MAGIC       ,clc_2018_100m.LULUCF_DESCRIPTION
--- MAGIC       ,clc_2018_100m.LULUCF_CODE_L2
--- MAGIC       ,clc_2018_100m.LULUCF_DESCRIPTION_L2
--- MAGIC       ,env_zones.Category as env_zone
--- MAGIC       ,PA_2022_protection
--- MAGIC       ,natura2000_protection
--- MAGIC       ,slope_class
--- MAGIC
--- MAGIC       from nuts3_2021
--- MAGIC
--- MAGIC       left JOIN clc_2018_100m       on     clc_2018_100m.gridnum = nuts3_2021.gridnum 
--- MAGIC       left JOIN env_zones           on     env_zones.gridnum = nuts3_2021.gridnum 
--- MAGIC       left JOIN Natura2000_100m_NET on     Natura2000_100m_NET.gridnum = nuts3_2021.gridnum 
--- MAGIC       left JOIN Pa2022_100m_NET     on     Pa2022_100m_NET.gridnum = nuts3_2021.gridnum 
--- MAGIC
--- MAGIC
--- MAGIC       left JOIN dem_1km_slope_classes     on     dem_1km_slope_classes.gridnum_1km = nuts3_2021.GridNum1km   --- jon on 1km!!
--- MAGIC
--- MAGIC
--- MAGIC
--- MAGIC
--- MAGIC                  """)    
--- MAGIC
--- MAGIC afforestation_cube_1
--- MAGIC
--- MAGIC     .coalesce(1) //be careful with this
--- MAGIC     .write.format("com.databricks.spark.csv")
--- MAGIC     .mode(SaveMode.Overwrite)
--- MAGIC     .option("sep","|")
--- MAGIC     .option("overwriteSchema", "true")
--- MAGIC     .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
--- MAGIC     .option("emptyValue", "")
--- MAGIC     .option("header","true")
--- MAGIC
--- MAGIC     ///.option("encoding", "UTF-16")  /// check ENCODING
--- MAGIC
--- MAGIC     .option("treatEmptyValuesAsNulls", "true")  
--- MAGIC     
--- MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/carbon_mapping/afforestation_simulation/afforestation_cube_1")
--- MAGIC
--- MAGIC
--- MAGIC     afforestation_cube_1.createOrReplaceTempView("afforestation_cube_1")  
--- MAGIC
--- MAGIC   
--- MAGIC
-
--- COMMAND ----------
-
-

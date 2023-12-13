@@ -285,6 +285,7 @@
 # MAGIC val FUA2021_updated = spark.sql(""" 
 # MAGIC   SELECT 
 # MAGIC         gridnum,
+# MAGIC         gridnum & cast(-65536 as bigint) as GridNum100m,
 # MAGIC         GridNum10km,
 # MAGIC         CNTR_CODE as country,
 # MAGIC         FUA_CODE  as fua_code,
@@ -299,6 +300,7 @@
 # MAGIC    
 # MAGIC       SELECT 
 # MAGIC                 gridnum,
+# MAGIC                 gridnum & cast(-65536 as bigint) as GridNum100m,
 # MAGIC                 GridNum10km,
 # MAGIC                 country,
 # MAGIC                 FUA_CODE  as fua_code,
@@ -458,6 +460,7 @@
 # MAGIC val lau_2020 = spark.sql(""" 
 # MAGIC         SELECT 
 # MAGIC         lau_2020_base.gridnum
+# MAGIC         ,lau_2020_base.gridnum & cast(-65536 as bigint) as GridNum100m
 # MAGIC         ,lau_2020_base.LAU2020_10m
 # MAGIC         ,lau_2020_base.AreaHa
 # MAGIC         ,LUT_lau2020.GISCO_ID
@@ -476,6 +479,17 @@
 # MAGIC
 # MAGIC
 # MAGIC
+# MAGIC //##########################################################################################################################################
+# MAGIC //// (10) Imperviousness 2018 - version 2018 010m  ################################################################################
+# MAGIC //##########################################################################################################################################
+# MAGIC // https://jedi.discomap.eea.europa.eu/Dimension/show?dimId=1608&fileId=633
+# MAGIC // cwsblobstorage01/cwsblob01/Dimensions/D_IMD2018_2018v_633_2021114_100m
+# MAGIC
+# MAGIC
+# MAGIC val soil_sealing_2018 = spark.read.format("delta").load("dbfs:/mnt/trainingDatabricks/Dimensions/D_IMD2018_2018v_633_2021114_100m//")             /// use load
+# MAGIC soil_sealing_2018.createOrReplaceTempView("soil_sealing_2018")
+# MAGIC
+# MAGIC
 
 # COMMAND ----------
 
@@ -484,6 +498,7 @@
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC select * from street_tree
 # MAGIC
 
 # COMMAND ----------
@@ -505,6 +520,11 @@
 # MAGIC --where fua_2021.CNTR_CODE = 'LU' 
 # MAGIC -- and treecover2018.category = 1
 # MAGIC
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC Select * from nuts3_2021
 
 # COMMAND ----------
 
@@ -799,3 +819,345 @@ for file in dbutils.fs.ls(folder):
 
 # MAGIC %sql
 # MAGIC SELECT * from bluecube_fua
+
+# COMMAND ----------
+
+# MAGIC %md ### 3.4) Soil sealing- 2018
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select *,
+# MAGIC Category/100.00 as soil_sealing_area_ha
+# MAGIC --max(Category) as Max
+# MAGIC --,min(Category) as Min
+# MAGIC
+# MAGIC from soil_sealing_2018 ---100m DIM
+# MAGIC  
+# MAGIC where 
+# MAGIC Category > 10
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC -- testing FUA 10m
+# MAGIC select 
+# MAGIC       --FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.gridnum,
+# MAGIC       --FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.GridNum100m,
+# MAGIC       FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.fua_name,
+# MAGIC       FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.fua_code,
+# MAGIC       FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.country,
+# MAGIC       (FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.AreaHa) as AreaHa,
+# MAGIC       (soil_sealing_2018.Category/100.00)/100 as soil_sealing_area_ha
+# MAGIC
+# MAGIC       from FUA2021_updated_AL_BA_ME_MK_RS_TR_XK -- new fua
+# MAGIC       LEFT JOiN soil_sealing_2018 on  soil_sealing_2018.gridnum = FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.GridNum100m   
+# MAGIC       where FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.country is not null
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC -- testing FUA 10m
+# MAGIC select 
+# MAGIC       --FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.gridnum,
+# MAGIC       --FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.GridNum100m,
+# MAGIC       FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.fua_name,
+# MAGIC       FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.fua_code,
+# MAGIC       FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.country,
+# MAGIC       SUM(FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.AreaHa) as AreaHa,
+# MAGIC       SUM(soil_sealing_2018.Category/100.00)*100 as soil_sealing_area_ha
+# MAGIC       from FUA2021_updated_AL_BA_ME_MK_RS_TR_XK -- new fua
+# MAGIC       LEFT JOiN soil_sealing_2018 on  soil_sealing_2018.gridnum = FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.GridNum100m   
+# MAGIC       where FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.country is not null
+# MAGIC       group  by 
+# MAGIC       FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.fua_name,
+# MAGIC       FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.fua_code,
+# MAGIC       FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.country
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select* from lau_2020
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC -- testing LAU
+# MAGIC select 
+# MAGIC    
+# MAGIC       lau_2020.LAU_ID as lau_code,
+# MAGIC       lau_2020.LAU_NAME as lau_name,
+# MAGIC       lau_2020.GISCO_ID,
+# MAGIC       SUM(lau_2020.AreaHa) as AreaHa,
+# MAGIC       SUM(soil_sealing_2018.Category/100.00/100.00) as soil_sealing_area_ha,
+# MAGIC       SUM(POP_2020) as population_2020
+# MAGIC       from lau_2020 
+# MAGIC
+# MAGIC       LEFT JOiN soil_sealing_2018 on  soil_sealing_2018.gridnum = lau_2020.GridNum100m   
+# MAGIC       
+# MAGIC       where lau_2020.GISCO_ID is not null
+# MAGIC
+# MAGIC       group by 
+# MAGIC
+# MAGIC             lau_2020.LAU_ID,
+# MAGIC             lau_2020.LAU_NAME,
+# MAGIC             lau_2020.GISCO_ID
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC show columns   from nuts3_2021
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC -- testing NUTS
+# MAGIC select 
+# MAGIC  ADM_COUNTRY
+# MAGIC , ISO2
+# MAGIC , LEVEL3_name
+# MAGIC , LEVEL2_name
+# MAGIC , LEVEL1_name
+# MAGIC , LEVEL0_name
+# MAGIC , LEVEL3_code
+# MAGIC , LEVEL2_code
+# MAGIC , LEVEL1_code
+# MAGIC , LEVEL0_code
+# MAGIC , EEA38_2020
+# MAGIC , EEA39
+# MAGIC , EU27_2020
+# MAGIC , EU28
+# MAGIC , EU27_2007
+# MAGIC , EFTA4
+# MAGIC , NUTS_EU
+# MAGIC , TAA
+# MAGIC ,SUM(soil_sealing_2018.Category/100.00) as soil_sealing_area_ha
+# MAGIC ,SUM(nuts3_2021.AreaHa) as Areaha
+# MAGIC       
+# MAGIC       from nuts3_2021 
+# MAGIC
+# MAGIC       LEFT JOiN soil_sealing_2018 on  soil_sealing_2018.GridNum = nuts3_2021.GridNum   
+# MAGIC       
+# MAGIC       where nuts3_2021.ISO2 is not null
+# MAGIC
+# MAGIC group by 
+# MAGIC  ADM_COUNTRY
+# MAGIC , ISO2
+# MAGIC , LEVEL3_name
+# MAGIC , LEVEL2_name
+# MAGIC , LEVEL1_name
+# MAGIC , LEVEL0_name
+# MAGIC , LEVEL3_code
+# MAGIC , LEVEL2_code
+# MAGIC , LEVEL1_code
+# MAGIC , LEVEL0_code
+# MAGIC , EEA38_2020
+# MAGIC , EEA39
+# MAGIC , EU27_2020
+# MAGIC , EU28
+# MAGIC , EU27_2007
+# MAGIC , EFTA4
+# MAGIC , NUTS_EU
+# MAGIC , TAA
+# MAGIC
+# MAGIC   
+
+# COMMAND ----------
+
+# MAGIC %scala
+# MAGIC
+# MAGIC // This box constructed the new  soil sealing 
+# MAGIC //---------------------------------------------------------------------------------------------------------------------------------
+# MAGIC // CUBE (1) FUA
+# MAGIC val fua_soilsealing2018 = spark.sql(""" 
+# MAGIC   
+# MAGIC select 
+# MAGIC  
+# MAGIC       FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.fua_name,
+# MAGIC       FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.fua_code,
+# MAGIC       FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.country,
+# MAGIC       SUM(FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.AreaHa) as AreaHa,
+# MAGIC       SUM(soil_sealing_2018.Category/100.00/100.00) as soil_sealing_area_ha
+# MAGIC       from FUA2021_updated_AL_BA_ME_MK_RS_TR_XK -- new fua
+# MAGIC       LEFT JOiN soil_sealing_2018 on  soil_sealing_2018.gridnum = FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.GridNum100m   
+# MAGIC       where FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.country is not null
+# MAGIC       group  by 
+# MAGIC       FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.fua_name,
+# MAGIC       FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.fua_code,
+# MAGIC       FUA2021_updated_AL_BA_ME_MK_RS_TR_XK.country
+# MAGIC       
+# MAGIC                                     """)
+# MAGIC fua_soilsealing2018
+# MAGIC     .coalesce(1) //be careful with this
+# MAGIC     .write.format("com.databricks.spark.csv")
+# MAGIC     .mode(SaveMode.Overwrite)
+# MAGIC     .option("sep","|")
+# MAGIC     .option("overwriteSchema", "true")
+# MAGIC     .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+# MAGIC     .option("emptyValue", "")
+# MAGIC     .option("header","true")
+# MAGIC     ///.option("encoding", "UTF-16")  /// check ENCODING
+# MAGIC     .option("treatEmptyValuesAsNulls", "true")  
+# MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Urban_green_indicators/fua_soilsealing2018")
+# MAGIC      ///fua_soilsealing2018.createOrReplaceTempView("fua_soilsealing2018")
+# MAGIC
+# MAGIC
+# MAGIC //---------------------------------------------------------------------------------------------------------------------------------
+# MAGIC
+# MAGIC
+# MAGIC // CUBE (2) LAU 
+# MAGIC val lau_soilsealing2018 = spark.sql(""" 
+# MAGIC   
+# MAGIC select 
+# MAGIC    
+# MAGIC       lau_2020.LAU_ID as lau_code,
+# MAGIC       lau_2020.LAU_NAME as lau_name,
+# MAGIC       lau_2020.GISCO_ID,
+# MAGIC       SUM(lau_2020.AreaHa) as AreaHa,
+# MAGIC       SUM(soil_sealing_2018.Category/100.00 /100.00) as soil_sealing_area_ha,
+# MAGIC       SUM(POP_2020) as population_2020
+# MAGIC       from lau_2020 
+# MAGIC
+# MAGIC       LEFT JOiN soil_sealing_2018 on  soil_sealing_2018.gridnum = lau_2020.GridNum100m   
+# MAGIC       
+# MAGIC       where lau_2020.GISCO_ID is not null
+# MAGIC
+# MAGIC       group by 
+# MAGIC
+# MAGIC             lau_2020.LAU_ID,
+# MAGIC             lau_2020.LAU_NAME,
+# MAGIC             lau_2020.GISCO_ID
+# MAGIC       
+# MAGIC                                     """)
+# MAGIC lau_soilsealing2018
+# MAGIC     .coalesce(1) //be careful with this
+# MAGIC     .write.format("com.databricks.spark.csv")
+# MAGIC     .mode(SaveMode.Overwrite)
+# MAGIC     .option("sep","|")
+# MAGIC     .option("overwriteSchema", "true")
+# MAGIC     .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+# MAGIC     .option("emptyValue", "")
+# MAGIC     .option("header","true")
+# MAGIC     ///.option("encoding", "UTF-16")  /// check ENCODING
+# MAGIC     .option("treatEmptyValuesAsNulls", "true")  
+# MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Urban_green_indicators/lau_soilsealing2018")
+# MAGIC      ///lau_soilsealing2018.createOrReplaceTempView("lau_soilsealing2018")
+# MAGIC      //---------------------------------------------------------------------------------------------------------------------------------
+# MAGIC //
+# MAGIC //
+# MAGIC //
+# MAGIC //// CUBE (3) NUTS 
+# MAGIC val nuts_soilsealing2018 = spark.sql(""" 
+# MAGIC
+# MAGIC             select 
+# MAGIC              ADM_COUNTRY
+# MAGIC             , ISO2
+# MAGIC             , LEVEL3_name
+# MAGIC             , LEVEL2_name
+# MAGIC             , LEVEL1_name
+# MAGIC             , LEVEL0_name
+# MAGIC             , LEVEL3_code
+# MAGIC             , LEVEL2_code
+# MAGIC             , LEVEL1_code
+# MAGIC             , LEVEL0_code
+# MAGIC             , EEA38_2020
+# MAGIC             , EEA39
+# MAGIC             , EU27_2020
+# MAGIC             , EU28
+# MAGIC             , EU27_2007
+# MAGIC             , EFTA4
+# MAGIC             , NUTS_EU
+# MAGIC             , TAA
+# MAGIC             ,SUM(soil_sealing_2018.Category/100.00) as soil_sealing_area_ha
+# MAGIC             ,SUM(nuts3_2021.AreaHa) as Areaha
+# MAGIC                   
+# MAGIC                   from nuts3_2021 
+# MAGIC
+# MAGIC                   LEFT JOiN soil_sealing_2018 on  soil_sealing_2018.GridNum = nuts3_2021.GridNum   
+# MAGIC                   
+# MAGIC                   where nuts3_2021.ISO2 is not null
+# MAGIC
+# MAGIC             group by 
+# MAGIC             ADM_COUNTRY
+# MAGIC             , ISO2
+# MAGIC             , LEVEL3_name
+# MAGIC             , LEVEL2_name
+# MAGIC             , LEVEL1_name
+# MAGIC             , LEVEL0_name
+# MAGIC             , LEVEL3_code
+# MAGIC             , LEVEL2_code
+# MAGIC             , LEVEL1_code
+# MAGIC             , LEVEL0_code
+# MAGIC             , EEA38_2020
+# MAGIC             , EEA39
+# MAGIC             , EU27_2020
+# MAGIC             , EU28
+# MAGIC             , EU27_2007
+# MAGIC             , EFTA4
+# MAGIC             , NUTS_EU
+# MAGIC             , TAA
+# MAGIC
+# MAGIC             
+# MAGIC
+# MAGIC       
+# MAGIC                                     """)
+# MAGIC nuts_soilsealing2018
+# MAGIC     .coalesce(1) //be careful with this
+# MAGIC     .write.format("com.databricks.spark.csv")
+# MAGIC     .mode(SaveMode.Overwrite)
+# MAGIC     .option("sep","|")
+# MAGIC     .option("overwriteSchema", "true")
+# MAGIC     .option("codec", "org.apache.hadoop.io.compress.GzipCodec")  //optional
+# MAGIC     .option("emptyValue", "")
+# MAGIC     .option("header","true")
+# MAGIC     ///.option("encoding", "UTF-16")  /// check ENCODING
+# MAGIC     .option("treatEmptyValuesAsNulls", "true")  
+# MAGIC     .save("dbfs:/mnt/trainingDatabricks/ExportTable/Urban_green_indicators/nuts_soilsealing2018")
+# MAGIC      ///nuts_soilsealing2018.createOrReplaceTempView("nuts_soilsealing2018")
+# MAGIC      //---------------------------------------------------------------------------------------------------------------------------------
+# MAGIC //
+# MAGIC
+# MAGIC
+
+# COMMAND ----------
+
+### Reading URL of resulting table: (for downloading to EEA greenmonkey)
+
+#### CUBE 1:################################################## FUA:
+print ("CUBE- 1 :----------------------------------------------------------")
+folder ="dbfs:/mnt/trainingDatabricks/ExportTable/Urban_green_indicators/fua_soilsealing2018"
+folder_output =folder[29:]
+for file in dbutils.fs.ls(folder):
+    if file.name[-2:] =="gz":
+        print ("Exported file:")
+        print(file.name)
+        print ("Exported URL:")
+        URL = "https://cwsblobstorage01.blob.core.windows.net/cwsblob01"+"/"+folder_output +"/"+file.name
+        print (URL)
+
+#### CUBE 2:################################################## LAU:
+print ("CUBE- 2 :----------------------------------------------------------")
+folder ="dbfs:/mnt/trainingDatabricks/ExportTable/Urban_green_indicators/lau_soilsealing2018"
+folder_output =folder[29:]
+for file in dbutils.fs.ls(folder):
+    if file.name[-2:] =="gz":
+        print ("Exported file:")
+        print(file.name)
+        print ("Exported URL:")
+        URL = "https://cwsblobstorage01.blob.core.windows.net/cwsblob01"+"/"+folder_output +"/"+file.name
+        print (URL)
+
+#### CUBE 3:################################################## NUTS:
+print ("CUBE- 3 :----------------------------------------------------------")
+folder ="dbfs:/mnt/trainingDatabricks/ExportTable/Urban_green_indicators/nuts_soilsealing2018"
+folder_output =folder[29:]
+for file in dbutils.fs.ls(folder):
+    if file.name[-2:] =="gz":
+        print ("Exported file:")
+        print(file.name)
+        print ("Exported URL:")
+        URL = "https://cwsblobstorage01.blob.core.windows.net/cwsblob01"+"/"+folder_output +"/"+file.name
+        print (URL)
